@@ -1,0 +1,5 @@
+{
+  "SetupVersion": 1,
+  "RepositoryFolderName": "Taurus_2026AutumnGameJam",
+  "RequiredSubmodules": ["Assets/AssetStoreTools"]
+}
