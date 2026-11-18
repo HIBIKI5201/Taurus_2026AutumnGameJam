@@ -105,3 +105,27 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# ---- プロジェクト固有（SymphonyKillChord の設定を元にしている） ----
+# Assets/AssetStoreTools はサブモジュール（Taurus_2026AutumnGameJam_AssetStoreTools）で管理するため、ここでは無視しない。
+
+# IDE が自動生成するもの
+.vscode/
+.idea/
+*.slnx
+
+# Android の署名鍵。鍵と証明書はリポジトリに置かない。
+*.jks
+*.keystore
+*.pem
+*.p12
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Claude Code のローカル設定（各自の環境依存のため共有しない）
+.claude/settings.local.json
+
+# Hot Reload（有償アセット。各自でインストールする）
+Packages/com.singularitygroup.hotreload/
