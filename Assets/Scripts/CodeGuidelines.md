@@ -5,7 +5,7 @@
 - CG-01 ファイルは UTF-8 で保存する
 - CG-02 1 ファイルに 1 クラス。ファイル名とクラス名を揃える（Unity が MonoBehaviour を見つけられなくなるため）
 - CG-03 フィールドは `private` にし、インスペクターに出すものは `[SerializeField]` を付ける。`public` フィールドは使わない
-- CG-04 名前空間 `Taurus.Runtime.<機能フォルダ>` を付ける（[設計方針](DesignPhilosophy.md#フォルダ)）
+- CG-04 名前空間 `Taurus.<Runtime / Develop / Editor>.<機能フォルダ>` を付ける（[設計方針](DesignPhilosophy.md#フォルダ)）
 
 ## 命名
 

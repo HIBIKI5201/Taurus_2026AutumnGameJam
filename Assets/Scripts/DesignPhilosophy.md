@@ -9,8 +9,15 @@
 | `Assets/Scripts/Editor` | エディタ拡張 |
 | `Assets/Scripts/Shaders` | シェーダー |
 
-名前空間のルートは `Taurus.Runtime`。`Runtime` の下の機能フォルダ名をその後ろに付ける（例: `Runtime/Player` → `Taurus.Runtime.Player`）。
-ルート名前空間は Project Settings（Editor → Root namespace）にも設定してあるので、新しく作ったスクリプトには自動で入る。
+名前空間は `Taurus.<Runtime / Develop / Editor>` の後ろに機能フォルダ名を付ける。
+
+| フォルダ | 名前空間の例 |
+| --- | --- |
+| `Runtime/Player` | `Taurus.Runtime.Player` |
+| `Develop/Cheat` | `Taurus.Develop.Cheat` |
+| `Editor/LevelTool` | `Taurus.Editor.LevelTool` |
+
+Project Settings（Editor → Root namespace）には `Taurus.Runtime` を設定してあるので、新しく作ったスクリプトにはこれが自動で入る。`Develop`・`Editor` に作ったときは手で書き換える。
 
 ## 書き方
 
