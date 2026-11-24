@@ -1,8 +1,5 @@
 # 設計方針
 
-2 日間のゲームジャム向け。**締め切りまでに遊べるものを出すこと**を最優先にする。
-設計は「数人で同時に触っても壊れない」ための最低限だけにする。
-
 ## フォルダ
 
 | フォルダ | 内容 |
@@ -12,7 +9,8 @@
 | `Assets/Scripts/Editor` | エディタ拡張 |
 | `Assets/Scripts/Shaders` | シェーダー |
 
-名前空間は `Taurus.<フォルダ>`（例: `Taurus.Runtime.Player`）。
+名前空間のルートは `Taurus.Runtime`。`Runtime` の下の機能フォルダ名をその後ろに付ける（例: `Runtime/Player` → `Taurus.Runtime.Player`）。
+ルート名前空間は Project Settings（Editor → Root namespace）にも設定してあるので、新しく作ったスクリプトには自動で入る。
 
 ## 書き方
 
