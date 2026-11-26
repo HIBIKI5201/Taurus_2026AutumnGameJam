@@ -100,6 +100,15 @@ const CLAUDE_ALLOWED_TOOLS = (
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
+// 非対話モードでは不要で、終了を遅らせる・裏で動き続ける原因になるツールは使わせない
+const CLAUDE_DISALLOWED_TOOLS = (
+  process.env.DISCORD_CLAUDE_DISALLOWED_TOOLS || "ScheduleWakeup,CronCreate,CronDelete,RemoteTrigger"
+)
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+// 途中経過を Discord へ流す最短間隔（デフォルト 2 分、0 で無効）
+const PROGRESS_INTERVAL_MS = Number(process.env.DISCORD_PROGRESS_INTERVAL_MS ?? 120_000);
 
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 // GUILDS(1<<0) | GUILD_MESSAGES(1<<9) | DIRECT_MESSAGES(1<<12) | MESSAGE_CONTENT(1<<15)
@@ -512,8 +521,10 @@ function quoteForCmd(arg) {
  * プロンプトは標準入力で渡す（コマンドライン長・エスケープの問題を避けるため）。
  */
 function runClaudePrompt(promptText, meta, handoffNote) {
-  const args = ["-p", "--output-format", "json", "--permission-mode", CLAUDE_PERMISSION_MODE];
+  // stream-json で 1 イベントずつ受け取り、途中経過を Discord へ流せるようにする
+  const args = ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", CLAUDE_PERMISSION_MODE];
   if (CLAUDE_ALLOWED_TOOLS.length > 0) args.push("--allowedTools", ...CLAUDE_ALLOWED_TOOLS);
+  if (CLAUDE_DISALLOWED_TOOLS.length > 0) args.push("--disallowedTools", ...CLAUDE_DISALLOWED_TOOLS);
   if (CLAUDE_MODEL) args.push("--model", CLAUDE_MODEL);
 
   const useShell = process.platform === "win32" && /\.(cmd|bat)$/i.test(CLAUDE_BIN);
@@ -527,43 +538,108 @@ function runClaudePrompt(promptText, meta, handoffNote) {
   console.log(`[DiscordHarness] Claude 起動 (pid=${child.pid}, 履歴=${meta.historyCount}件, 引き継ぎ=${Boolean(handoffNote)})`);
 
   return new Promise((resolve, reject) => {
-    let stdout = "";
+    let stdoutTail = "";
+    let lineBuffer = "";
     let stderr = "";
     let timedOut = false;
+    let settled = false;
+    let resultEvent = null;
+    let exitTimer = null;
+    let lastText = "";
+    let lastTool = "";
+    let toolCount = 0;
+
+    const finish = (fn) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      clearTimeout(exitTimer);
+      fn();
+    };
 
     const timer = setTimeout(() => {
       timedOut = true;
       killProcessTree(child);
     }, REPLY_TIMEOUT_MS);
 
-    child.stdout.on("data", (d) => (stdout += d));
-    child.stderr.on("data", (d) => (stderr += d));
+    const resolveFromResult = (code) => {
+      const parsed = resultEvent;
+      console.log(`[DiscordHarness] Claude 完了 (code=${code}, session=${parsed.session_id || "?"}, error=${Boolean(parsed.is_error)}, tools=${toolCount})`);
+      const text = typeof parsed.result === "string" ? parsed.result.trim() : "";
+      if (parsed.is_error) {
+        // 未ログイン等では subtype が "success" のまま is_error=true になるため、subtype は success 以外のときだけ添える
+        const kind = parsed.subtype && parsed.subtype !== "success" ? `（${parsed.subtype}）` : "";
+        resolve({ reply: `Claude の処理でエラーになりました${kind}:\n${text.slice(0, 1500)}` });
+      } else {
+        resolve({ reply: text || lastText || "Claude の処理が完了しました（応答本文なし）。" });
+      }
+    };
+
+    const handleEvent = (event) => {
+      if (event.type === "assistant" && Array.isArray(event.message?.content)) {
+        for (const part of event.message.content) {
+          if (part.type === "text" && part.text?.trim()) {
+            lastText = part.text.trim();
+          } else if (part.type === "tool_use") {
+            toolCount++;
+            lastTool = describeToolUse(part);
+          }
+        }
+        meta.onProgress?.({ agent: "Claude", text: lastText, tool: lastTool, toolCount });
+      } else if (event.type === "result") {
+        resultEvent = event;
+        // 最終結果が出たら終わりとみなす。予約済みの起床などでプロセスが残っても、少し待って止める
+        exitTimer = setTimeout(() => {
+          console.warn(`[DiscordHarness] Claude が結果出力後も終了しないため停止します (pid=${child.pid})`);
+          killProcessTree(child);
+          finish(() => resolveFromResult("killed"));
+        }, 15_000);
+      }
+    };
+
+    child.stdout.on("data", (d) => {
+      const chunk = String(d);
+      stdoutTail = (stdoutTail + chunk).slice(-4000);
+      lineBuffer += chunk;
+      let newline;
+      while ((newline = lineBuffer.indexOf("\n")) >= 0) {
+        const line = lineBuffer.slice(0, newline).trim();
+        lineBuffer = lineBuffer.slice(newline + 1);
+        if (!line.startsWith("{")) continue;
+        try {
+          handleEvent(JSON.parse(line));
+        } catch {
+          // 1 行に収まらない・壊れた行は無視する
+        }
+      }
+    });
+    child.stderr.on("data", (d) => (stderr = (stderr + d).slice(-4000)));
     child.on("error", (err) => {
-      clearTimeout(timer);
-      reject(new Error(`Claude を起動できません（${CLAUDE_BIN}）: ${err.message}`));
+      finish(() => reject(new Error(`Claude を起動できません（${CLAUDE_BIN}）: ${err.message}`)));
     });
     child.on("close", (code) => {
-      clearTimeout(timer);
-      if (timedOut) {
-        resolve({ reply: "Claude の処理がタイムアウトしました（作業ブランチに途中の変更が残っている可能性があります）。" });
-        return;
-      }
-
-      const parsed = parseClaudeJson(stdout);
-      if (parsed) {
-        console.log(`[DiscordHarness] Claude 完了 (code=${code}, session=${parsed.session_id || "?"}, error=${Boolean(parsed.is_error)})`);
-        const text = typeof parsed.result === "string" ? parsed.result.trim() : "";
-        if (parsed.is_error) {
-          // 未ログイン等では subtype が "success" のまま is_error=true になるため、subtype は success 以外のときだけ添える
-          const kind = parsed.subtype && parsed.subtype !== "success" ? `（${parsed.subtype}）` : "";
-          resolve({ reply: `Claude の処理でエラーになりました${kind}:\n${text.slice(0, 1500)}` });
-        } else {
-          resolve({ reply: text || "Claude の処理が完了しました（応答本文なし）。" });
+      // 最後の行が改行なしで終わった場合も拾う
+      if (lineBuffer.trim().startsWith("{")) {
+        try {
+          handleEvent(JSON.parse(lineBuffer.trim()));
+        } catch {
+          // 無視
         }
-        return;
       }
 
-      reject(new Error(`Claude が異常終了しました (code=${code}): ${(stderr || stdout).trim().slice(0, 800)}`));
+      finish(() => {
+        if (resultEvent) {
+          resolveFromResult(code);
+        } else if (timedOut) {
+          resolve({
+            reply:
+              "Claude の処理がタイムアウトしました（作業ブランチに途中の変更が残っている可能性があります）。" +
+              (lastText ? `\n直近の進捗:\n${lastText.slice(0, 1200)}` : ""),
+          });
+        } else {
+          reject(new Error(`Claude が異常終了しました (code=${code}): ${(stderr || stdoutTail).trim().slice(0, 800)}`));
+        }
+      });
     });
 
     // Claude が入力を読み切る前に終了した場合の EPIPE で Bot ごと落ちないようにする
@@ -572,23 +648,43 @@ function runClaudePrompt(promptText, meta, handoffNote) {
   });
 }
 
-/** --output-format json の出力（最後の JSON オブジェクト）を取り出す。 */
-function parseClaudeJson(stdout) {
-  const text = (stdout || "").trim();
-  if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    const start = text.lastIndexOf("\n{");
-    if (start >= 0) {
-      try {
-        return JSON.parse(text.slice(start + 1));
-      } catch {
-        // 解析不能
-      }
+/** 途中経過に載せるため、ツール呼び出しを「Edit HUDController.cs」のような短い文にする。 */
+function describeToolUse(part) {
+  const input = part.input || {};
+  const target = input.description || input.file_path || input.pattern || input.command || input.prompt || "";
+  const short = String(target).replace(/\s+/g, " ");
+  const name = /[\\/]/.test(short) && !input.description ? path.basename(short) : short;
+  return `${part.name}${name ? ` ${name.slice(0, 80)}` : ""}`;
+}
+
+/**
+ * 途中経過を Discord へ流す関数を作る。PROGRESS_INTERVAL_MS より短い間隔では送らず、
+ * 内容が前回と同じなら送らない。送信失敗は無視する（本処理を止めない）。
+ */
+function createProgressReporter(channelId, replyToMessageId) {
+  let lastSentAt = Date.now();
+  let lastSentKey = "";
+  return (progress) => {
+    if (!(PROGRESS_INTERVAL_MS > 0)) return;
+    const now = Date.now();
+    if (now - lastSentAt < PROGRESS_INTERVAL_MS) return;
+
+    const text = (progress.text || "").replace(/\s+\n/g, "\n").trim();
+    const key = `${text}|${progress.tool || ""}`;
+    if (!text && !progress.tool) return;
+    if (key === lastSentKey) return;
+
+    lastSentAt = now;
+    lastSentKey = key;
+    const lines = [`⏳ 途中経過（${progress.agent}）`];
+    if (text) lines.push(text.length > 700 ? `${text.slice(0, 700)}…` : text);
+    if (progress.tool) {
+      lines.push(`直近の操作: \`${progress.tool.replace(/`/g, "'")}\`${progress.toolCount ? `（計 ${progress.toolCount} 操作）` : ""}`);
     }
-    return null;
-  }
+    sendDiscordMessage(channelId, lines.join("\n"), replyToMessageId).catch((err) =>
+      console.warn("[DiscordHarness] 途中経過の送信失敗:", err.message)
+    );
+  };
 }
 
 function killProcessTree(child) {
@@ -671,6 +767,7 @@ async function runAntigravityPrompt(promptText, meta) {
   let lastState = null;
   let hasObservedRunning = false;
   let consecutiveIdleCount = 0;
+  let lastProgressCheckAt = 0;
 
   await sleep(2500);
 
@@ -697,6 +794,12 @@ async function runAntigravityPrompt(promptText, meta) {
     if (runState === "RUN_STATE_RUNNING") {
       hasObservedRunning = true;
       consecutiveIdleCount = 0;
+      // 途中経過：transcript の最新応答を 30 秒おきに拾い、送るかどうかは reporter が間隔で判断する
+      if (meta.onProgress && Date.now() - lastProgressCheckAt >= 30_000) {
+        lastProgressCheckAt = Date.now();
+        const latest = extractLastAssistantReply(conversationId);
+        if (latest) meta.onProgress({ agent: "Antigravity", text: latest });
+      }
     } else if (runState === "RUN_STATE_IDLE") {
       const reply = extractLastAssistantReply(conversationId);
       // 起動直後にまだ RUNNING に入る前の空 IDLE を誤検知しないよう、
@@ -953,6 +1056,7 @@ async function runJob(msg, prompt, referencedMessage, authorName) {
         contextText: ctx.contextText,
         historyCount: ctx.historyCount,
         hasReference: ctx.hasReference,
+        onProgress: createProgressReporter(msg.channel_id, msg.id),
       },
       async (reason) => {
         await sendDiscordMessage(msg.channel_id, `${reason}、Claude に切り替えて続けます…`, msg.id).catch(() => {});
