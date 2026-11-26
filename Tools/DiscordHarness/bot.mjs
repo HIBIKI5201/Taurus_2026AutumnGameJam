@@ -58,7 +58,10 @@ const REPLY_TO_BOT_TRIGGERS = (process.env.DISCORD_REPLY_TO_BOT_TRIGGERS ?? "tru
 const HISTORY_LIMIT = Math.max(0, Math.min(50, Number(process.env.DISCORD_HISTORY_LIMIT || 15)));
 const MAX_HISTORY_CHARS = Math.max(1000, Number(process.env.DISCORD_MAX_HISTORY_CHARS || 8000));
 const AGY_MODEL = (process.env.DISCORD_AGY_MODEL || "flash").trim();
-const REPLY_TIMEOUT_MS = Number(process.env.DISCORD_REPLY_TIMEOUT_MS || 600_000);
+// 大きな実装＋Unity確認＋PR作成まで完了できるようデフォルト 30 分にする
+const REPLY_TIMEOUT_MS = Number(process.env.DISCORD_REPLY_TIMEOUT_MS || 1_800_000);
+// RUN_STATE_IDLE を連続何回確認したら完了とみなすか（一時的なIDLE揺らぎでの誤終了防止）
+const IDLE_CONFIRM_POLLS = 2;
 
 const AGY_LS_ADDRESS = (process.env.ANTIGRAVITY_LS_ADDRESS || "").trim();
 const AGY_CSRF_TOKEN = (process.env.ANTIGRAVITY_CSRF_TOKEN || "").trim();
@@ -125,10 +128,24 @@ async function sendDiscordMessage(channelId, content, replyToMessageId = null) {
       payload.allowed_mentions = { replied_user: false };
     }
     first = false;
-    await discordFetch(`/channels/${channelId}/messages`, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+
+    // 一時的なネットワーク断やレート制限に対して最大3回リトライする
+    let lastErr = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await discordFetch(`/channels/${channelId}/messages`, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+        console.warn(`[DiscordHarness] メッセージ送信リトライ (${attempt}/3):`, err.message);
+        await sleep(1500 * attempt);
+      }
+    }
+    if (lastErr) throw lastErr;
   }
 }
 
@@ -317,7 +334,10 @@ async function runAntigravityPrompt(promptText, meta) {
 
   const promptParts = [
     `[Discord からの依頼 / 送信者: ${meta.authorName} / 場所: ${meta.channelLabel}]`,
-    "以下の会話履歴・返信対象メッセージを踏まえて依頼に対応し、最後に Discord へそのまま返せる簡潔な日本語で回答してください。",
+    "以下のルールを必ず守って依頼に対応してください：",
+    "1. 会話履歴・返信対象メッセージを踏まえて対応する。",
+    "2. コード・シーン・Prefab・設定などのファイル変更を伴うタスクを完了した場合は、必ず「対象ファイルのみをステージ → 作業ブランチ（feature/<作業名>/agent）へコミット＆プッシュ → main へ PR 作成（.github/PULL_REQUEST_TEMPLATE.md 準拠）」まで完了させてから最終回答する。",
+    "3. 最終回答は Discord へそのまま返信されるため、実施内容・確認結果・作成した PR の URL を簡潔な日本語で必ず記載して終える（ツール実行だけで無言終了しないこと）。",
   ];
 
   if (meta.contextText) {
@@ -347,41 +367,73 @@ async function runAntigravityPrompt(promptText, meta) {
     `[DiscordHarness] Antigravity 会話開始: ${conversationId} (履歴=${meta.historyCount}件, 返信元=${meta.hasReference})`
   );
 
-  // 完了（RUN_STATE_IDLE）になるまでポーリング
+  // 完了（RUN_STATE_IDLE が連続安定＋応答ログ確認）までポーリング
   const deadline = Date.now() + REPLY_TIMEOUT_MS;
   let lastState = null;
+  let hasObservedRunning = false;
+  let consecutiveIdleCount = 0;
 
-  await sleep(1500);
+  await sleep(2500);
 
   while (Date.now() < deadline) {
-    const info = await callConversationService("GetConversation", { conversationId });
+    let info;
+    try {
+      info = await callConversationService("GetConversation", { conversationId });
+    } catch (err) {
+      console.warn(`[DiscordHarness] GetConversation 一時エラー (${conversationId}):`, err.message);
+      await sleep(3000);
+      continue;
+    }
+
     const conv = info?.conversation;
     lastState = conv?.state;
     const runState = lastState?.runState;
 
-    if (runState === "RUN_STATE_IDLE") {
+    if (runState === "RUN_STATE_RUNNING") {
+      hasObservedRunning = true;
+      consecutiveIdleCount = 0;
+    } else if (runState === "RUN_STATE_IDLE") {
       const reply = extractLastAssistantReply(conversationId);
-      if (reply) {
-        return { conversationId, reply };
+      // 起動直後にまだ RUNNING に入る前の空 IDLE を誤検知しないよう、
+      // 「一度 RUNNING を見た」または「すでに最終応答が書き出されている」場合のみカウントする
+      if (hasObservedRunning || reply) {
+        consecutiveIdleCount++;
       }
-      const summary = lastState?.summary || "処理が完了しました。";
-      return {
-        conversationId,
-        reply: `${summary}\n（会話ID: \`${conversationId}\`）`,
-      };
+
+      if (consecutiveIdleCount >= IDLE_CONFIRM_POLLS) {
+        // transcript.jsonl の最終フラッシュを少し待ってから再取得
+        await sleep(800);
+        const finalReply = extractLastAssistantReply(conversationId) || reply;
+        console.log(
+          `[DiscordHarness] Antigravity 会話完了: ${conversationId} (replyLen=${finalReply ? finalReply.length : 0})`
+        );
+        if (finalReply) {
+          return { conversationId, reply: finalReply };
+        }
+        const summary = lastState?.summary || "処理が完了しました。";
+        return {
+          conversationId,
+          reply: `${summary}\n（会話ID: \`${conversationId}\`）`,
+        };
+      }
     }
 
-    await sleep(2500);
+    await sleep(3000);
   }
 
+  console.warn(`[DiscordHarness] タイムアウト: ${conversationId}`);
+  const partialReply = extractLastAssistantReply(conversationId);
   return {
     conversationId,
-    reply: `タイムアウトしました（現在もバックグラウンド実行中の可能性があります / 会話ID: \`${conversationId}\`）。`,
+    reply: partialReply
+      ? `処理がタイムアウトしました（直近の進捗）:\n${partialReply.slice(0, 1500)}\n（会話ID: \`${conversationId}\`）`
+      : `タイムアウトしました（現在もバックグラウンド実行中の可能性があります / 会話ID: \`${conversationId}\`）。`,
   };
 }
 
 /**
- * Antigravity の transcript.jsonl から最後のアシスタント応答テキストを抽出する。
+ * Antigravity の transcript.jsonl から最後のアシスタント応答（PLANNER_RESPONSE）を抽出する。
+ * ツール出力（type === "GENERIC"）や思考のみ（content なし）のステップは除外する。
  */
 function extractLastAssistantReply(conversationId) {
   const candidates = [
@@ -416,35 +468,27 @@ function extractLastAssistantReply(conversationId) {
 function findAssistantTextInEntry(entry) {
   if (!entry || typeof entry !== "object") return null;
 
-  const role = (entry.role || entry.author || entry.sender || "").toString().toLowerCase();
-  const type = (entry.type || "").toString().toLowerCase();
-  const isAssistant =
-    role === "assistant" ||
-    role === "model" ||
-    type.includes("assistant") ||
-    type.includes("response") ||
-    type.includes("model");
+  const type = (entry.type || "").toString().toUpperCase();
+  const source = (entry.source || "").toString().toUpperCase();
 
-  if (!isAssistant) return null;
-
-  if (typeof entry.text === "string" && entry.text.trim()) return entry.text;
-  if (typeof entry.content === "string" && entry.content.trim()) return entry.content;
-  if (typeof entry.message === "string" && entry.message.trim()) return entry.message;
-
-  if (Array.isArray(entry.content)) {
-    const joined = entry.content
-      .map((part) => (typeof part === "string" ? part : part?.text || ""))
-      .filter(Boolean)
-      .join("\n");
-    if (joined.trim()) return joined;
+  // ツール実行結果（GENERIC）やユーザー入力・システム通知は除外する
+  if (type === "GENERIC" || type === "USER_INPUT" || type === "SYSTEM_MESSAGE") {
+    return null;
   }
 
-  if (Array.isArray(entry.parts)) {
-    const joined = entry.parts
-      .map((part) => (typeof part === "string" ? part : part?.text || ""))
-      .filter(Boolean)
-      .join("\n");
-    if (joined.trim()) return joined;
+  // Antigravity transcript の正式なアシスタント応答形式：source=MODEL, type=PLANNER_RESPONSE
+  if (type === "PLANNER_RESPONSE" && source === "MODEL") {
+    if (typeof entry.content === "string" && entry.content.trim()) {
+      return entry.content;
+    }
+    return null;
+  }
+
+  // 将来フォーマット変更時のフォールバック
+  const role = (entry.role || entry.author || "").toString().toLowerCase();
+  if (role === "assistant" || role === "model") {
+    if (typeof entry.content === "string" && entry.content.trim()) return entry.content;
+    if (typeof entry.text === "string" && entry.text.trim()) return entry.text;
   }
 
   return null;
