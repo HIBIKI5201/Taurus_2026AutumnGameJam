@@ -28,6 +28,9 @@ namespace Taurus.Runtime.UI
         // 残した画面を消すフェードの秒数
         private const float PANEL_EXIT_FADE_SECONDS = 0.22f;
 
+        // 次の画面をフェードで出す秒数
+        private const float PANEL_ENTER_FADE_SECONDS = 0.2f;
+
         // 終了ボタンを押してから実際に終了するまでの秒数（演出を見せるため）
         private const float QUIT_DELAY_SECONDS = 0.35f;
 
@@ -84,7 +87,7 @@ namespace Taurus.Runtime.UI
         private MotionHandle _popMotionHandle;
         private ButtonPressEffect _plusPressEffect;
         private ButtonPressEffect _minusPressEffect;
-        private readonly Dictionary<GameObject, MotionHandle> _panelExitHandles = new Dictionary<GameObject, MotionHandle>();
+        private readonly Dictionary<GameObject, MotionHandle> _panelMotionHandles = new Dictionary<GameObject, MotionHandle>();
         private GamePhase? _lastPhase;
         private bool _isQuitting;
 
@@ -122,7 +125,7 @@ namespace Taurus.Runtime.UI
         {
             CancelWaveFadeMotion();
             CancelPopMotion();
-            CancelPanelExits();
+            CancelPanelMotions();
             UnbindGameController();
             ServiceLocator.UnregisterInstance(this);
         }
@@ -295,30 +298,74 @@ namespace Taurus.Runtime.UI
             HandlePlayerCountChanged(controller.PlayerCount, 0);
         }
 
+        /// <summary> アウトゲーム画面（タイトル・ルール・リザルト）を消す演出にかかる秒数。 </summary>
+        public float OutGameExitSeconds => PANEL_EXIT_HOLD_SECONDS + PANEL_EXIT_FADE_SECONDS;
+
+        /// <summary>
+        ///     いま表示中のアウトゲーム画面を、押されたボタンの演出つきで消し、消え終わるまで待つ。
+        ///     ゲーム開始（Rules / Result → Playing）の前に GameController から呼び、画面が消えてから Wave を始めるために使う。
+        /// </summary>
+        public async UniTask PlayOutGameExitAsync(GamePhase nextPhase, CancellationToken cancellationToken)
+        {
+            if (!_lastPhase.HasValue)
+            {
+                return;
+            }
+
+            GameObject panel = GetOutGamePanel(_lastPhase.Value);
+            if (panel == null || !panel.activeSelf || _panelMotionHandles.ContainsKey(panel))
+            {
+                return;
+            }
+
+            ButtonPressEffect leavingButton = GetLeavingButtonEffect(_lastPhase.Value, nextPhase);
+            if (leavingButton != null)
+            {
+                leavingButton.Play();
+            }
+
+            PlayPanelExit(panel);
+            await UniTask.Delay(TimeSpan.FromSeconds(OutGameExitSeconds), ignoreTimeScale: true, cancellationToken: cancellationToken);
+        }
+
         private void HandlePhaseChanged(GamePhase phase)
         {
             GamePhase? previous = _lastPhase;
             _lastPhase = phase;
+            bool isPhaseChanged = previous.HasValue && previous.Value != phase;
+
+            // 前のアウトゲーム画面がまだ表示中（消す演出をしていない）なら、ここでボタン演出つきで消す
+            GameObject leavingPanel = isPhaseChanged ? GetOutGamePanel(previous.Value) : null;
+            bool canPlayExit = leavingPanel != null && leavingPanel.activeSelf && !_panelMotionHandles.ContainsKey(leavingPanel);
 
             ShowPanel(_titlePanel, phase == GamePhase.Title);
             ShowPanel(_rulesPanel, phase == GamePhase.Rules);
 
             // Success 表示中はゲーム画面を表示したまま成功バナーを重ねて表示する
-            if (_gamePanel != null) _gamePanel.SetActive(phase == GamePhase.Playing || phase == GamePhase.Success);
+            ShowPanel(_gamePanel, phase == GamePhase.Playing || phase == GamePhase.Success);
             ShowPanel(_resultPanel, phase == GamePhase.Result);
             if (_successBanner != null) _successBanner.SetActive(phase == GamePhase.Success);
 
-            // キー入力でもクリックでも、画面を進めたボタンを離した演出を見せてから、前の画面を消す
-            if (previous.HasValue && previous.Value != phase)
+            if (!isPhaseChanged || GetOutGamePanel(previous.Value) == null)
+            {
+                return;
+            }
+
+            // 前の画面が消え終わってから、次の画面をフェードで出す（同時に動くと見にくいため）
+            float enterDelay = 0f;
+            if (canPlayExit)
             {
                 ButtonPressEffect leavingButton = GetLeavingButtonEffect(previous.Value, phase);
-                GameObject leavingPanel = GetOutGamePanel(previous.Value);
-                if (leavingButton != null && leavingPanel != null)
+                if (leavingButton != null)
                 {
-                    PlayPanelExit(leavingPanel);
                     leavingButton.Play();
                 }
+
+                PlayPanelExit(leavingPanel);
+                enterDelay = OutGameExitSeconds;
             }
+
+            PlayPanelEnter(GetPanelForPhase(phase), enterDelay);
         }
 
         private void ShowPanel(GameObject panel, bool isVisible)
@@ -328,7 +375,7 @@ namespace Taurus.Runtime.UI
                 return;
             }
 
-            CancelPanelExit(panel);
+            CancelPanelMotion(panel);
             panel.SetActive(isVisible);
         }
 
@@ -341,6 +388,11 @@ namespace Taurus.Runtime.UI
                 case GamePhase.Result: return _resultPanel;
                 default: return null;
             }
+        }
+
+        private GameObject GetPanelForPhase(GamePhase phase)
+        {
+            return phase == GamePhase.Playing || phase == GamePhase.Success ? _gamePanel : GetOutGamePanel(phase);
         }
 
         // 画面の切り替わり方から、押されたボタンを決める
@@ -358,33 +410,60 @@ namespace Taurus.Runtime.UI
         // 前の画面を少し残してからフェードで消す。その間はクリックを受け付けない
         private void PlayPanelExit(GameObject panel)
         {
-            CanvasGroup group = panel.GetComponent<CanvasGroup>();
-            if (group == null)
-            {
-                group = panel.AddComponent<CanvasGroup>();
-            }
-
+            CanvasGroup group = PreparePanelGroup(panel, 1f);
             panel.SetActive(true);
-            group.alpha = 1f;
-            group.blocksRaycasts = false;
-            _panelExitHandles[panel] = LMotion.Create(1f, 0f, PANEL_EXIT_FADE_SECONDS)
+            _panelMotionHandles[panel] = LMotion.Create(1f, 0f, PANEL_EXIT_FADE_SECONDS)
                 .WithDelay(PANEL_EXIT_HOLD_SECONDS)
                 .WithEase(Ease.InQuad)
                 .WithScheduler(MotionScheduler.UpdateIgnoreTimeScale)
                 .WithOnComplete(() =>
                 {
-                    _panelExitHandles.Remove(panel);
+                    _panelMotionHandles.Remove(panel);
                     ResetPanelGroup(panel);
                     panel.SetActive(false);
                 })
                 .Bind(group, static (alpha, g) => g.alpha = alpha);
         }
 
-        private void CancelPanelExit(GameObject panel)
+        // 次の画面を delay 秒待ってからフェードで出す。出し終わるまではクリックを受け付けない
+        private void PlayPanelEnter(GameObject panel, float delay)
         {
-            if (_panelExitHandles.TryGetValue(panel, out MotionHandle handle))
+            if (panel == null || !panel.activeSelf)
             {
-                _panelExitHandles.Remove(panel);
+                return;
+            }
+
+            CanvasGroup group = PreparePanelGroup(panel, 0f);
+            _panelMotionHandles[panel] = LMotion.Create(0f, 1f, PANEL_ENTER_FADE_SECONDS)
+                .WithDelay(delay)
+                .WithEase(Ease.OutQuad)
+                .WithScheduler(MotionScheduler.UpdateIgnoreTimeScale)
+                .WithOnComplete(() =>
+                {
+                    _panelMotionHandles.Remove(panel);
+                    ResetPanelGroup(panel);
+                })
+                .Bind(group, static (alpha, g) => g.alpha = alpha);
+        }
+
+        private static CanvasGroup PreparePanelGroup(GameObject panel, float alpha)
+        {
+            CanvasGroup group = panel.GetComponent<CanvasGroup>();
+            if (group == null)
+            {
+                group = panel.AddComponent<CanvasGroup>();
+            }
+
+            group.alpha = alpha;
+            group.blocksRaycasts = false;
+            return group;
+        }
+
+        private void CancelPanelMotion(GameObject panel)
+        {
+            if (_panelMotionHandles.TryGetValue(panel, out MotionHandle handle))
+            {
+                _panelMotionHandles.Remove(panel);
                 if (handle.IsActive())
                 {
                     handle.Cancel();
@@ -394,12 +473,12 @@ namespace Taurus.Runtime.UI
             ResetPanelGroup(panel);
         }
 
-        private void CancelPanelExits()
+        private void CancelPanelMotions()
         {
-            foreach (GameObject panel in new List<GameObject>(_panelExitHandles.Keys))
+            foreach (GameObject panel in new List<GameObject>(_panelMotionHandles.Keys))
             {
-                CancelPanelExit(panel);
-                panel.SetActive(_lastPhase.HasValue && GetOutGamePanel(_lastPhase.Value) == panel);
+                CancelPanelMotion(panel);
+                panel.SetActive(_lastPhase.HasValue && GetPanelForPhase(_lastPhase.Value) == panel);
             }
         }
 
