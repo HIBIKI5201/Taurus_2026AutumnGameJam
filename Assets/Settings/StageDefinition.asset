@@ -16,6 +16,8 @@ MonoBehaviour:
   _multiPendulumPenalty: 0.4
   _doublePendulumPenalty: 0.5
   _triplePendulumPenalty: 1.1
+  _overflowBehavior: 0
+  _loopTailCount: 3
   _waves:
   - _singlePendulumCount: 1
     _doublePendulumCount: 0
@@ -25,13 +27,13 @@ MonoBehaviour:
     _stopRule: 0
     _timeQuantizationStep: 1
     _useWaveQuantityConstraint: 1
-    _waveMinQuantity: 1
+    _waveMinQuantity: 2
     _waveMaxQuantity: 3
     _intervals:
     - _label: "\u524D\u534A(\u5E73\u5766)"
       _durationSeconds: 4
       _useQuantityConstraint: 1
-      _minQuantity: 0
+      _minQuantity: 1
       _maxQuantity: 2
       _choices:
       - _weight: 76

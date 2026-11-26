@@ -283,10 +283,10 @@ namespace Taurus.Runtime.Stage
         {
             return new[]
             {
-                // W01: 平坦型（超簡単・導入 / 1重×1）
-                BuildWave(1, 0, 0, 1, 3, new[]
+                // W01: 平坦型（チュートリアル導入 / 1重×1 / 前半4秒で最低1回・後半4秒で最低1回を保証）
+                BuildWave(1, 0, 0, 2, 3, new[]
                 {
-                    new StageIntervalConfig("前半(平坦)", 4f, new[] { new WeightedCountChoice(76, 0), new WeightedCountChoice(24, 1) }, true, 0, 2),
+                    new StageIntervalConfig("前半(平坦)", 4f, new[] { new WeightedCountChoice(76, 0), new WeightedCountChoice(24, 1) }, true, 1, 2),
                     new StageIntervalConfig("後半(平坦)", 4f, new[] { new WeightedCountChoice(74, 0), new WeightedCountChoice(26, 1) }, true, 1, 2),
                 }),
                 // W02: 線形増加型（チュートリアル的 / 1重×1）
