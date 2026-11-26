@@ -1,4 +1,7 @@
+using System;
 using System.Collections.Generic;
+using System.Threading;
+using Cysharp.Threading.Tasks;
 using SymphonyFrameWork.System.ServiceLocate;
 using Taurus.Runtime.Game;
 using UnityEngine;
@@ -53,12 +56,24 @@ namespace Taurus.Runtime.UI
         [SerializeField] private Button _retryButton;
         [SerializeField] private Button _homeButton;
 
+        [Header("Wave Transition Fade（UIの背面に描画しUIを隠さない暗転）")]
+        // Wave切替時の暗転合計時間（秒）。前半で暗転、ピークでWave切替、後半で明転する
+        [SerializeField, Min(0f)] private float _waveFadeDurationSeconds = 0.5f;
+        // 暗転用オーバーレイ画像（未設定時はCanvas先頭に自動生成する）
+        [SerializeField] private Image _waveFadeOverlay;
+        [SerializeField] private Color _waveFadeColor = Color.black;
+
         private GameController _subscribedController;
         private float _feedbackHideTimer;
+
+        /// <summary> Wave切替時の暗転時間（秒）。Inspectorから変更可能。 </summary>
+        public float WaveFadeDurationSeconds => Mathf.Max(0f, _waveFadeDurationSeconds);
 
         private void Awake()
         {
             BindButtons();
+            EnsureWaveFadeOverlay();
+            SetWaveFadeAlpha(0f);
         }
 
         private void Update()
@@ -363,6 +378,112 @@ namespace Taurus.Runtime.UI
                         : "—";
                 }
             }
+        }
+
+        /// <summary>
+        /// Wave切替時にUIを隠さない暗転（Canvas最背面の黒オーバーレイ）を再生する。
+        /// 前半で暗転し、暗転ピークで onDarkPeak を実行して振り子・Waveを切り替え、後半で明転する。
+        /// </summary>
+        public async UniTask PlayWaveTransitionFadeAsync(Action onDarkPeak, CancellationToken cancellationToken)
+        {
+            float totalDuration = WaveFadeDurationSeconds;
+            if (totalDuration <= 0f)
+            {
+                onDarkPeak?.Invoke();
+                return;
+            }
+
+            EnsureWaveFadeOverlay();
+            if (_waveFadeOverlay == null)
+            {
+                onDarkPeak?.Invoke();
+                return;
+            }
+
+            // 必ずCanvasの最背面（SiblingIndex = 0）に配置し、全UIパネルより後ろに描画する
+            _waveFadeOverlay.transform.SetAsFirstSibling();
+            _waveFadeOverlay.gameObject.SetActive(true);
+
+            float halfDuration = totalDuration * 0.5f;
+
+            try
+            {
+                // 前半：0 → 1（暗転）
+                await AnimateWaveFadeAsync(0f, 1f, halfDuration, cancellationToken);
+
+                // 暗転ピークで次Waveの開始処理（振り子生成・カメラ切替）を実行
+                onDarkPeak?.Invoke();
+
+                // 後半：1 → 0（明転）
+                await AnimateWaveFadeAsync(1f, 0f, halfDuration, cancellationToken);
+            }
+            finally
+            {
+                // キャンセルや終了時も暗転が残らないよう確実に透明・非表示へ戻す
+                SetWaveFadeAlpha(0f);
+            }
+        }
+
+        private async UniTask AnimateWaveFadeAsync(float fromAlpha, float toAlpha, float duration, CancellationToken cancellationToken)
+        {
+            if (duration <= 0f)
+            {
+                SetWaveFadeAlpha(toAlpha);
+                return;
+            }
+
+            float elapsed = 0f;
+            SetWaveFadeAlpha(fromAlpha);
+
+            while (elapsed < duration)
+            {
+                await UniTask.Yield(PlayerLoopTiming.Update, cancellationToken);
+                elapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+                SetWaveFadeAlpha(Mathf.Lerp(fromAlpha, toAlpha, t));
+            }
+
+            SetWaveFadeAlpha(toAlpha);
+        }
+
+        /// <summary> 暗転オーバーレイが未設定の場合、Canvas先頭に全画面の黒Imageを自動生成する。 </summary>
+        private void EnsureWaveFadeOverlay()
+        {
+            if (_waveFadeOverlay != null)
+            {
+                _waveFadeOverlay.raycastTarget = false;
+                _waveFadeOverlay.transform.SetAsFirstSibling();
+                return;
+            }
+
+            GameObject overlayObj = new GameObject("WaveFadeOverlay", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            overlayObj.transform.SetParent(transform, false);
+            overlayObj.transform.SetAsFirstSibling();
+
+            RectTransform rt = overlayObj.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+
+            Image img = overlayObj.GetComponent<Image>();
+            img.color = new Color(_waveFadeColor.r, _waveFadeColor.g, _waveFadeColor.b, 0f);
+            img.raycastTarget = false;
+
+            _waveFadeOverlay = img;
+        }
+
+        private void SetWaveFadeAlpha(float alpha)
+        {
+            if (_waveFadeOverlay == null)
+            {
+                return;
+            }
+
+            Color c = _waveFadeColor;
+            c.a = Mathf.Clamp01(alpha);
+            _waveFadeOverlay.color = c;
+            _waveFadeOverlay.gameObject.SetActive(c.a > 0.001f);
         }
 
         private GameController ActiveController => _subscribedController != null ? _subscribedController : _gameController;
