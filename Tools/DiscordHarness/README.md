@@ -39,6 +39,15 @@ Discord 経由の依頼なので全許可（`bypassPermissions`）にはして�
 - エージェントには「作業ブランチの変更は終える前にコミット＆プッシュする」よう指示しています。
 - 無効にするなら `DISCORD_RETURN_TO_MAIN=false`、戻す先を変えるなら `DISCORD_MAIN_BRANCH` を設定します。
 
+## 途中経過を Discord に流す
+長い作業でも止まって見えないよう、処理中の様子を `⏳ 途中経過（Claude）` のような返信で流します。
+
+- Claude は `--output-format stream-json` で起動し、出力を1件ずつ読みます。最新の発言と直近の操作（`Edit HUDController.cs` など）と操作の合計数を送ります。
+- Antigravity は会話ログ（transcript）から最新の応答を拾って送ります。
+- 送る間隔は最短 `DISCORD_PROGRESS_INTERVAL_MS`（既定 2 分）です。前回と同じ内容なら送りません。`0` で無効になります。
+- Claude には、時間をおいて自分を起こす機能（`ScheduleWakeup` / `CronCreate` / `CronDelete` / `RemoteTrigger`）を使わせません（`DISCORD_CLAUDE_DISALLOWED_TOOLS`）。これがあると、作業が終わってもプロセスが終了しないことがあります。
+  - 念のため、最終結果が出てから 15 秒たってもプロセスが残っていれば止めて、返信します。
+
 ## 1. Discord Developer Portal 側の事前設定
 1. Bot を作成したアプリの **Bot** タブを開く。
 2. **Privileged Gateway Intents** の **`MESSAGE CONTENT INTENT`** を **ON** にして保存する。
@@ -87,6 +96,10 @@ DISCORD_BOT_TOKEN=ここにBotのトークンを貼る
 # DISCORD_CLAUDE_MODEL=                    # 空なら Claude Code の既定モデル
 # DISCORD_CLAUDE_PERMISSION_MODE=acceptEdits
 # DISCORD_CLAUDE_ALLOWED_TOOLS=Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh:*),Bash(unity:*),Bash(node:*),Bash(rg:*)
+# DISCORD_CLAUDE_DISALLOWED_TOOLS=ScheduleWakeup,CronCreate,CronDelete,RemoteTrigger
+
+# 途中経過を Discord に流す最短間隔（ミリ秒、デフォルト 2 分、0 で無効）
+# DISCORD_PROGRESS_INTERVAL_MS=120000
 ```
 
 ## 3. 使い方
