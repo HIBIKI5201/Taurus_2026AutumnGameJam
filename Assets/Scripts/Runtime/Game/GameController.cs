@@ -413,13 +413,13 @@ namespace Taurus.Runtime.Game
                 // HTML参照実装と同じシード導出式：Wave番号と玉インデックスから素数オフセットで独立シードを作る
                 int ix = _currentWave * 17 + i * 2 + 1;
                 uint parentSeed = unchecked(_runSeed + (uint)(ix * 7919));
-                MotionSchedule parentSchedule = MotionScheduleGenerator.Generate(parentSeed, config.Choices);
+                MotionSchedule parentSchedule = MotionScheduleGenerator.Generate(parentSeed, config);
 
                 MotionSchedule childSchedule = null;
                 if (isDouble)
                 {
                     uint childSeed = unchecked(_runSeed + (uint)((ix + 1) * 7919));
-                    childSchedule = MotionScheduleGenerator.Generate(childSeed, config.Choices);
+                    childSchedule = MotionScheduleGenerator.Generate(childSeed, config);
                 }
 
                 instance.OnTopCrossed += HandlePendulumTopCrossed;
