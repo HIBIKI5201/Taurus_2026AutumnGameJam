@@ -30,15 +30,27 @@ namespace Taurus.Runtime.Game
         [SerializeField] private AudioClip _childTopClip;   // 子玉の真上通過チャイム
         [SerializeField] private AudioClip _waveSuccessClip;// Wave正解ジングル
         [SerializeField] private AudioClip _gameOverClip;   // 不一致・ゲームオーバージングル
+        [SerializeField] private AudioClip _waveStartClip;  // Wave開始ホイッスル
+        [SerializeField] private AudioClip _countFloorClip; // カウンター0で減算しようとした時のキャンセル音
+        [SerializeField] private AudioClip _recordHighClip; // トップ3入りした時の新記録ジングル
+
+        [Tooltip("ゲームオーバー音から新記録ジングルまでの間隔（秒）")]
+        [SerializeField] private float _recordHighDelaySeconds = 1.0f;
 
         [Header("BGM Clips（未設定時は無音）")]
         [SerializeField] private AudioClip _titleBgmClip;   // タイトル・ルール説明BGM
         [SerializeField] private AudioClip _gameBgmClip;    // インゲームWave中BGM
-        [SerializeField] private AudioClip _resultBgmClip;  // リザルト画面BGM
+        [SerializeField] private AudioClip _resultBgmClip;  // リザルト画面BGM（クリアWave数が少ないとき：しんみり）
+        [SerializeField] private AudioClip _resultHighBgmClip; // リザルト画面BGM（クリアWave数が多いとき：明るい）
+
+        [Tooltip("クリアしたWave数がこの値以上なら、リザルトで明るいBGM（_resultHighBgmClip）を流す")]
+        [SerializeField] private int _resultHighMinClearedWaves = 4;
 
         private GameController _subscribedController;
         private bool _hasObservedPhase;
         private GamePhase _lastPhase;
+        // 減算時に「0のまま」だったかを判定するため、直前のカウントを覚えておく
+        private int _lastPlayerCount;
 
         private void OnEnable()
         {
@@ -85,6 +97,20 @@ namespace Taurus.Runtime.Game
             _resultBgmClip = resultBgmClip;
         }
 
+        /// <summary> 追加の SE クリップ（Wave開始・下限キャンセル・新記録）を設定する（主にテスト・エディタ構築用）。 </summary>
+        public void ConfigureExtraClips(AudioClip waveStartClip, AudioClip countFloorClip, AudioClip recordHighClip)
+        {
+            _waveStartClip = waveStartClip;
+            _countFloorClip = countFloorClip;
+            _recordHighClip = recordHighClip;
+        }
+
+        /// <summary> クリアWave数が多いとき用のリザルトBGMを設定する（主にテスト・エディタ構築用）。 </summary>
+        public void ConfigureResultHighBgm(AudioClip resultHighBgmClip)
+        {
+            _resultHighBgmClip = resultHighBgmClip;
+        }
+
         private void ResolveAndBindGameController()
         {
             if (ServiceLocator.TryGetInstance<GameController>(out GameController located))
@@ -124,6 +150,7 @@ namespace Taurus.Runtime.Game
 
             _subscribedController.OnPhaseChanged += HandlePhaseChanged;
             _subscribedController.OnTitlePressChanged += HandleTitlePressChanged;
+            _subscribedController.OnWaveStarted += HandleWaveStarted;
             _subscribedController.OnPlayerCountChanged += HandlePlayerCountChanged;
             _subscribedController.OnPendulumTopCrossed += HandlePendulumTopCrossed;
             _subscribedController.OnWaveSucceeded += HandleWaveSucceeded;
@@ -144,6 +171,7 @@ namespace Taurus.Runtime.Game
 
             _subscribedController.OnPhaseChanged -= HandlePhaseChanged;
             _subscribedController.OnTitlePressChanged -= HandleTitlePressChanged;
+            _subscribedController.OnWaveStarted -= HandleWaveStarted;
             _subscribedController.OnPlayerCountChanged -= HandlePlayerCountChanged;
             _subscribedController.OnPendulumTopCrossed -= HandlePendulumTopCrossed;
             _subscribedController.OnWaveSucceeded -= HandleWaveSucceeded;
@@ -168,7 +196,13 @@ namespace Taurus.Runtime.Game
 
             _lastPhase = phase;
             _hasObservedPhase = true;
-            ApplyBgmForPhase(phase);
+
+            // リザルトのBGMはクリアWave数で選ぶため、数が分かる OnGameFinished で流す
+            // （GameController は Result への遷移を通知した直後に OnGameFinished を通知する）
+            if (phase != GamePhase.Result)
+            {
+                ApplyBgmForPhase(phase);
+            }
         }
 
         private void ApplyBgmForPhase(GamePhase phase)
@@ -198,6 +232,11 @@ namespace Taurus.Runtime.Game
             }
         }
 
+        private void HandleWaveStarted(int wave)
+        {
+            PlaySe(_waveStartClip);
+        }
+
         private void HandlePlayerCountChanged(int currentCount, int delta)
         {
             if (delta > 0)
@@ -206,8 +245,12 @@ namespace Taurus.Runtime.Game
             }
             else if (delta < 0)
             {
-                PlaySe(_countDownClip);
+                // 0 のまま減算しようとした（下限で止まった）ときはキャンセル音、それ以外は通常の減算音
+                bool hitFloor = IsCountFloorHit(_lastPlayerCount, currentCount);
+                PlaySe(hitFloor && _countFloorClip != null ? _countFloorClip : _countDownClip);
             }
+
+            _lastPlayerCount = currentCount;
         }
 
         private void HandlePendulumTopCrossed(PendulumMotion pendulum, bool isChild, int crossedCount)
@@ -222,7 +265,62 @@ namespace Taurus.Runtime.Game
 
         private void HandleGameFinished(int clearedWaves, int expectedCount, int playerCount, IReadOnlyList<int> records)
         {
+            PlayBgm(SelectResultBgm(clearedWaves));
             PlaySe(_gameOverClip);
+
+            // 今回の記録がトップ3に入っていれば、ゲームオーバー音の後に新記録ジングルを鳴らす
+            if (IsTopRecord(clearedWaves, records))
+            {
+                CancelInvoke(nameof(PlayRecordHigh));
+                Invoke(nameof(PlayRecordHigh), Mathf.Max(0f, _recordHighDelaySeconds));
+            }
+        }
+
+        private void PlayRecordHigh()
+        {
+            PlaySe(_recordHighClip);
+        }
+
+        /// <summary> クリアWave数に応じたリザルトBGMを返す。多いとき用が未設定なら少ないとき用を使う。 </summary>
+        private AudioClip SelectResultBgm(int clearedWaves)
+        {
+            if (IsHighResult(clearedWaves, _resultHighMinClearedWaves) && _resultHighBgmClip != null)
+            {
+                return _resultHighBgmClip;
+            }
+
+            return _resultBgmClip;
+        }
+
+        /// <summary> クリアWave数が「多い」側（明るいリザルトBGM）に入るかを返す。 </summary>
+        public static bool IsHighResult(int clearedWaves, int highMinClearedWaves)
+        {
+            return clearedWaves >= highMinClearedWaves;
+        }
+
+        /// <summary> 減算の通知で、減算前も後も 0 だった（下限で止まった）かを返す。 </summary>
+        public static bool IsCountFloorHit(int previousCount, int currentCount)
+        {
+            return previousCount == 0 && currentCount == 0;
+        }
+
+        /// <summary> 今回の記録がトップ3の記録一覧に入っているかを返す。0 Wave（1つもクリアしていない）は記録扱いしない。 </summary>
+        public static bool IsTopRecord(int clearedWaves, IReadOnlyList<int> records)
+        {
+            if (clearedWaves <= 0 || records == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < records.Count; i++)
+            {
+                if (records[i] == clearedWaves)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void PlaySe(AudioClip clip)

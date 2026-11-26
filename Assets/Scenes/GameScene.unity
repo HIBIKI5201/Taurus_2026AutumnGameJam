@@ -3865,9 +3865,15 @@ MonoBehaviour:
   _childTopClip: {fileID: 8300000, guid: 1c1a0e20af62a1146937b94e2a22aa47, type: 3}
   _waveSuccessClip: {fileID: 8300000, guid: ad915e4c4acabc445888bcb838d289ee, type: 3}
   _gameOverClip: {fileID: 8300000, guid: 91ecb4919a48c4b4ab42cc7c3117d9ce, type: 3}
+  _waveStartClip: {fileID: 8300000, guid: 6e864d0856a07152ab0130a95b7f1b7f, type: 3}
+  _countFloorClip: {fileID: 8300000, guid: 8c53d5a99b4472dbc617c2ddb807777e, type: 3}
+  _recordHighClip: {fileID: 8300000, guid: 7ef25affeae34c4ef17ec14761847fc8, type: 3}
+  _recordHighDelaySeconds: 1
   _titleBgmClip: {fileID: 8300000, guid: 2381d900e20ec3a42a0133a8562de97d, type: 3}
   _gameBgmClip: {fileID: 8300000, guid: 44387851a1666c64da3acc254ac7b28b, type: 3}
   _resultBgmClip: {fileID: 8300000, guid: 05756061177743d48b593afccd762b8d, type: 3}
+  _resultHighBgmClip: {fileID: 8300000, guid: dc189b339ce7916ddc26253af6ca6f33, type: 3}
+  _resultHighMinClearedWaves: 4
 --- !u!82 &1437390486
 AudioSource:
   m_ObjectHideFlags: 0
