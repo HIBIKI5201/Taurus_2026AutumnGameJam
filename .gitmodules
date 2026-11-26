@@ -2,3 +2,5 @@
 	path = Assets/AssetStoreTools
 	url = ../Taurus_2026AutumnGameJam_AssetStoreTools.git
 	branch = main
+	update = checkout
+	fetchRecurseSubmodules = true
