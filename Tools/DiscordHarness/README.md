@@ -1,7 +1,22 @@
-# Discord Bot ↔ Antigravity 受付ハーネス
+# Discord Bot ↔ Antigravity / Claude 受付ハーネス
 
 Discord Bot としてログインし、受信したメッセージを **返信元メッセージ・スレッド開始メッセージ・直近の会話履歴** と合わせてローカルの Antigravity（`ConversationService`）へ投入し、結果を Discord に返信する軽量ハーネスです。
 Node.js 22+ の組み込み `WebSocket` / `fetch` のみで動作するため、`npm install` は不要です。
+
+## Antigravity 優先・Claude 予備
+依頼はまず Antigravity が処理します。次の場合は Claude Code（`claude -p`）が同じ依頼を引き継ぎます。
+
+- Antigravity が利用制限に掛かったとき。`RESOURCE_EXHAUSTED`・`rate limit`・`quota`・HTTP 429 などのエラーで判定します。
+  - 会話を作る段階で弾かれた場合と、実行途中で止まった場合の両方が対象です。
+  - 途中で止まった場合、Claude には Antigravity の会話ID を渡し、残っている変更や作業ブランチを確認してから続きを仕上げるよう指示します。
+- `ANTIGRAVITY_LS_ADDRESS` / `ANTIGRAVITY_CSRF_TOKEN` が未設定のとき。
+
+利用制限を一度検知すると、`DISCORD_AGY_COOLDOWN_MS`（デフォルト 30 分）の間は Antigravity を飛ばし、最初から Claude で処理します。
+切り替えたときは Discord に「Claude に切り替えて続けます…」と通知し、最終回答の末尾に「（処理: Claude）」を付けます。
+
+Claude はリポジトリ直下で起動します。Claude Code CLI がインストール済みでログインしていることが前提です。
+Discord 経由の依頼なので全許可（`bypassPermissions`）にはしていません。編集の自動承認（`acceptEdits`）と、許可ツールの明示（`DISCORD_CLAUDE_ALLOWED_TOOLS`）に留めています。
+許可リストにないコマンドは実行されません。Claude に必要な操作が増えたら、この許可リストに足してください。
 
 ## 1. Discord Developer Portal 側の事前設定
 1. Bot を作成したアプリの **Bot** タブを開く。
@@ -34,11 +49,21 @@ DISCORD_BOT_TOKEN=ここにBotのトークンを貼る
 
 # Antigravity で使うモデル（flash / pro / flash_lite）
 # DISCORD_AGY_MODEL=flash
+
+# 利用制限を検知した後、Antigravity を飛ばして Claude を使う期間（ミリ秒、デフォルト 30 分）
+# DISCORD_AGY_COOLDOWN_MS=1800000
+
+# Claude 予備の設定
+# DISCORD_CLAUDE_ENABLED=true
+# DISCORD_CLAUDE_BIN=claude.cmd            # Windows の既定。PATH 外なら絶対パスを指定
+# DISCORD_CLAUDE_MODEL=                    # 空なら Claude Code の既定モデル
+# DISCORD_CLAUDE_PERMISSION_MODE=acceptEdits
+# DISCORD_CLAUDE_ALLOWED_TOOLS=Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh:*),Bash(unity:*),Bash(node:*),Bash(rg:*)
 ```
 
 ## 3. 使い方
 - `@Bot !ping` : 疎通確認
-- `@Bot !status` : Bot・Antigravity 接続状態と履歴設定・実行中タスク数の確認
-- `@Bot <依頼内容>` : 直近履歴を含めて Antigravity で処理し結果を返信
+- `@Bot !status` : Bot・Antigravity 接続状態（利用制限中か）・Claude 予備の設定・履歴設定・実行中タスク数の確認
+- `@Bot <依頼内容>` : 直近履歴を含めて Antigravity で処理し結果を返信（利用制限時は Claude が代わりに処理）
 - 特定メッセージへ「返信」＋ `@Bot これについて教えて` : 返信先メッセージの内容を明示的に参照して回答
 - Bot の返信へそのまま「返信」: メンション無しでも会話の続きとして応答
