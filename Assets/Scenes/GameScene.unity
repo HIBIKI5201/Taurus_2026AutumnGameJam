@@ -3872,6 +3872,8 @@ MonoBehaviour:
   _titleBgmClip: {fileID: 8300000, guid: 2381d900e20ec3a42a0133a8562de97d, type: 3}
   _gameBgmClip: {fileID: 8300000, guid: 44387851a1666c64da3acc254ac7b28b, type: 3}
   _resultBgmClip: {fileID: 8300000, guid: 05756061177743d48b593afccd762b8d, type: 3}
+  _resultHighBgmClip: {fileID: 8300000, guid: dc189b339ce7916ddc26253af6ca6f33, type: 3}
+  _resultHighMinClearedWaves: 4
 --- !u!82 &1437390486
 AudioSource:
   m_ObjectHideFlags: 0

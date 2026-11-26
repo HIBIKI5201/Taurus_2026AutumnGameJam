@@ -40,7 +40,11 @@ namespace Taurus.Runtime.Game
         [Header("BGM Clips（未設定時は無音）")]
         [SerializeField] private AudioClip _titleBgmClip;   // タイトル・ルール説明BGM
         [SerializeField] private AudioClip _gameBgmClip;    // インゲームWave中BGM
-        [SerializeField] private AudioClip _resultBgmClip;  // リザルト画面BGM
+        [SerializeField] private AudioClip _resultBgmClip;  // リザルト画面BGM（クリアWave数が少ないとき：しんみり）
+        [SerializeField] private AudioClip _resultHighBgmClip; // リザルト画面BGM（クリアWave数が多いとき：明るい）
+
+        [Tooltip("クリアしたWave数がこの値以上なら、リザルトで明るいBGM（_resultHighBgmClip）を流す")]
+        [SerializeField] private int _resultHighMinClearedWaves = 4;
 
         private GameController _subscribedController;
         private bool _hasObservedPhase;
@@ -99,6 +103,12 @@ namespace Taurus.Runtime.Game
             _waveStartClip = waveStartClip;
             _countFloorClip = countFloorClip;
             _recordHighClip = recordHighClip;
+        }
+
+        /// <summary> クリアWave数が多いとき用のリザルトBGMを設定する（主にテスト・エディタ構築用）。 </summary>
+        public void ConfigureResultHighBgm(AudioClip resultHighBgmClip)
+        {
+            _resultHighBgmClip = resultHighBgmClip;
         }
 
         private void ResolveAndBindGameController()
@@ -186,7 +196,13 @@ namespace Taurus.Runtime.Game
 
             _lastPhase = phase;
             _hasObservedPhase = true;
-            ApplyBgmForPhase(phase);
+
+            // リザルトのBGMはクリアWave数で選ぶため、数が分かる OnGameFinished で流す
+            // （GameController は Result への遷移を通知した直後に OnGameFinished を通知する）
+            if (phase != GamePhase.Result)
+            {
+                ApplyBgmForPhase(phase);
+            }
         }
 
         private void ApplyBgmForPhase(GamePhase phase)
@@ -249,6 +265,7 @@ namespace Taurus.Runtime.Game
 
         private void HandleGameFinished(int clearedWaves, int expectedCount, int playerCount, IReadOnlyList<int> records)
         {
+            PlayBgm(SelectResultBgm(clearedWaves));
             PlaySe(_gameOverClip);
 
             // 今回の記録がトップ3に入っていれば、ゲームオーバー音の後に新記録ジングルを鳴らす
@@ -262,6 +279,23 @@ namespace Taurus.Runtime.Game
         private void PlayRecordHigh()
         {
             PlaySe(_recordHighClip);
+        }
+
+        /// <summary> クリアWave数に応じたリザルトBGMを返す。多いとき用が未設定なら少ないとき用を使う。 </summary>
+        private AudioClip SelectResultBgm(int clearedWaves)
+        {
+            if (IsHighResult(clearedWaves, _resultHighMinClearedWaves) && _resultHighBgmClip != null)
+            {
+                return _resultHighBgmClip;
+            }
+
+            return _resultBgmClip;
+        }
+
+        /// <summary> クリアWave数が「多い」側（明るいリザルトBGM）に入るかを返す。 </summary>
+        public static bool IsHighResult(int clearedWaves, int highMinClearedWaves)
+        {
+            return clearedWaves >= highMinClearedWaves;
         }
 
         /// <summary> 減算の通知で、減算前も後も 0 だった（下限で止まった）かを返す。 </summary>

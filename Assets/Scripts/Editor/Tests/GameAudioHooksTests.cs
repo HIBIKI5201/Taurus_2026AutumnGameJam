@@ -27,8 +27,8 @@ namespace Taurus.Editor.Tests
             "Assets/AssetStoreTools/Audio/SE/SE_Record_High.mp3",
             "Assets/AssetStoreTools/Audio/BGM/BGM_Title.mp3",
             "Assets/AssetStoreTools/Audio/BGM/BGM_Wave_Main.mp3",
-            "Assets/AssetStoreTools/Audio/BGM/BGM_Result.mp3",
-            "Assets/AssetStoreTools/Audio/BGM/BGM_Result_Alt.mp3",
+            "Assets/AssetStoreTools/Audio/BGM/BGM_Result_Low.mp3",
+            "Assets/AssetStoreTools/Audio/BGM/BGM_Result_High.mp3",
         };
 
         [Test]
@@ -99,6 +99,7 @@ namespace Taurus.Editor.Tests
                     "_titleBgmClip",
                     "_gameBgmClip",
                     "_resultBgmClip",
+                    "_resultHighBgmClip",
                 };
 
                 foreach (string field in clipFields)
@@ -123,6 +124,15 @@ namespace Taurus.Editor.Tests
         public void IsCountFloorHit_DetectsOnlyDecrementAtZero(int previous, int current, bool expected)
         {
             Assert.AreEqual(expected, GameAudioHooks.IsCountFloorHit(previous, current));
+        }
+
+        [TestCase(0, 4, false, TestName = "0Waveクリア＝しんみりBGM")]
+        [TestCase(3, 4, false, TestName = "3Waveクリア＝しんみりBGM")]
+        [TestCase(4, 4, true, TestName = "4Waveクリア＝明るいBGM")]
+        [TestCase(6, 4, true, TestName = "6Waveクリア＝明るいBGM")]
+        public void IsHighResult_SwitchesAtThreshold(int clearedWaves, int highMinClearedWaves, bool expected)
+        {
+            Assert.AreEqual(expected, GameAudioHooks.IsHighResult(clearedWaves, highMinClearedWaves));
         }
 
         [TestCase(5, new[] { 7, 5, 2 }, true, TestName = "トップ3に入った記録＝新記録")]
