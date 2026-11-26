@@ -6,6 +6,11 @@ Node.js 22+ の組み込み `WebSocket` / `fetch` のみで動作するため、
 ## Antigravity 優先・Claude 予備
 依頼はまず Antigravity が処理します。次の場合は Claude Code（`claude -p`）が同じ依頼を引き継ぎます。
 
+- Antigravity の残り利用枠が 10% 以下のとき（`DISCORD_AGY_MIN_REMAINING` で変更可）。
+  - 依頼を受けるたびに、Antigravity の `RetrieveUserQuotaSummary` で 5 時間枠と週枠の残りを取得し、少ない方で判定します。
+  - 見るのは `DISCORD_AGY_MODEL` が属するモデルグループの枠です（既定の flash / pro なら Gemini）。
+  - 残量を取得できなかったときは判定を飛ばし、Antigravity を試します。
+
 - Antigravity が利用制限に掛かったとき。`RESOURCE_EXHAUSTED`・`rate limit`・`quota`・HTTP 429 などのエラーで判定します。
   - 会話を作る段階で弾かれた場合と、実行途中で止まった場合の両方が対象です。
   - 途中で止まった場合、Claude には Antigravity の会話ID を渡し、残っている変更や作業ブランチを確認してから続きを仕上げるよう指示します。
@@ -50,6 +55,9 @@ DISCORD_BOT_TOKEN=ここにBotのトークンを貼る
 # Antigravity で使うモデル（flash / pro / flash_lite）
 # DISCORD_AGY_MODEL=flash
 
+# Antigravity の残り利用枠がこの割合以下なら最初から Claude を使う（0〜1、デフォルト 0.1 = 10%）
+# DISCORD_AGY_MIN_REMAINING=0.1
+
 # 利用制限を検知した後、Antigravity を飛ばして Claude を使う期間（ミリ秒、デフォルト 30 分）
 # DISCORD_AGY_COOLDOWN_MS=1800000
 
@@ -63,7 +71,7 @@ DISCORD_BOT_TOKEN=ここにBotのトークンを貼る
 
 ## 3. 使い方
 - `@Bot !ping` : 疎通確認
-- `@Bot !status` : Bot・Antigravity 接続状態（利用制限中か）・Claude 予備の設定・履歴設定・実行中タスク数の確認
+- `@Bot !status` : Bot・Antigravity 接続状態（利用制限中か）・残り利用枠・Claude 予備の設定・履歴設定・実行中タスク数の確認
 - `@Bot <依頼内容>` : 直近履歴を含めて Antigravity で処理し結果を返信（利用制限時は Claude が代わりに処理）
 - 特定メッセージへ「返信」＋ `@Bot これについて教えて` : 返信先メッセージの内容を明示的に参照して回答
 - Bot の返信へそのまま「返信」: メンション無しでも会話の続きとして応答
