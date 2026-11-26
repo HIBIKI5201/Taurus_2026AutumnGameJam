@@ -1,0 +1,130 @@
+{
+    "name": "GameInputActions",
+    "maps": [
+        {
+            "name": "Game",
+            "id": "8e8a4a6e-59d6-4d7c-9c74-9c0c1f5d1a01",
+            "actions": [
+                {
+                    "name": "CountUp",
+                    "type": "Button",
+                    "id": "b1f4b86a-2b5c-4f2d-8f4d-2e6f1a7c2b01",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "CountDown",
+                    "type": "Button",
+                    "id": "b1f4b86a-2b5c-4f2d-8f4d-2e6f1a7c2b02",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "Cancel",
+                    "type": "Button",
+                    "id": "b1f4b86a-2b5c-4f2d-8f4d-2e6f1a7c2b03",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "c2a5c97b-3c6d-4a3e-9a5e-3f7a2b8d3c01",
+                    "path": "<Keyboard>/space",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "CountUp",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "c2a5c97b-3c6d-4a3e-9a5e-3f7a2b8d3c02",
+                    "path": "<Keyboard>/leftCtrl",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "CountDown",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "c2a5c97b-3c6d-4a3e-9a5e-3f7a2b8d3c03",
+                    "path": "<Keyboard>/rightCtrl",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "CountDown",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "c2a5c97b-3c6d-4a3e-9a5e-3f7a2b8d3c04",
+                    "path": "<Keyboard>/escape",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "Cancel",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        },
+        {
+            "name": "Debug",
+            "id": "8e8a4a6e-59d6-4d7c-9c74-9c0c1f5d1a02",
+            "actions": [
+                {
+                    "name": "ToggleOverlay",
+                    "type": "Button",
+                    "id": "b1f4b86a-2b5c-4f2d-8f4d-2e6f1a7c2b04",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "c2a5c97b-3c6d-4a3e-9a5e-3f7a2b8d3c05",
+                    "path": "<Keyboard>/f",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "ToggleOverlay",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        }
+    ],
+    "controlSchemes": [
+        {
+            "name": "Keyboard&Mouse",
+            "bindingGroup": "Keyboard&Mouse",
+            "devices": [
+                {
+                    "devicePath": "<Keyboard>",
+                    "isOptional": false,
+                    "isOR": false
+                },
+                {
+                    "devicePath": "<Mouse>",
+                    "isOptional": false,
+                    "isOR": false
+                }
+            ]
+        }
+    ]
+}
