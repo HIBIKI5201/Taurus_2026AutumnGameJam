@@ -553,7 +553,8 @@ namespace Taurus.Editor.Setup
 
             Text startCountText = CreateText("StartCountText", titlePanel.transform, uiFont, $"0 / {GameController.TITLE_REQUIRED_PRESSES}", 34, LIME_COLOR, new Vector2(0f, -100f), new Vector2(400f, 50f), FontStyle.Bold);
             startCountText.gameObject.SetActive(showTitleMeter);
-            Button titleStartBtn = CreateButton("TitleStartButton", titlePanel.transform, uiFont, squareSprite, "スタート (SPACE)", LIME_COLOR, BG_COLOR, new Vector2(0f, -195f), new Vector2(440f, 76f));
+            Vector2 titleStartBtnPos = showTitleMeter ? new Vector2(0f, -195f) : new Vector2(0f, -95f);
+            Button titleStartBtn = CreateButton("TitleStartButton", titlePanel.transform, uiFont, squareSprite, "スタート (SPACE)", LIME_COLOR, BG_COLOR, titleStartBtnPos, new Vector2(440f, 76f));
 
             // Rules Panel
             GameObject rulesPanel = CreatePanel("RulesPanel", canvasObj.transform, PANEL_OVERLAY_COLOR);
