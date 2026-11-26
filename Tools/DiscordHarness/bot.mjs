@@ -73,6 +73,8 @@ const AGY_PROJECT_ID = (process.env.ANTIGRAVITY_PROJECT_ID || "").trim();
 const AGY_BRAIN_DIR = path.join(os.homedir(), ".gemini", "antigravity", "brain");
 // 利用制限を検知した後、Antigravity を飛ばして Claude を直接使う期間（デフォルト 30 分）
 const AGY_COOLDOWN_MS = Number(process.env.DISCORD_AGY_COOLDOWN_MS || 1_800_000);
+// Antigravity の残り利用枠（5時間枠・週枠のうち少ない方）がこの割合以下なら、最初から Claude を使う（デフォルト 10%）
+const AGY_MIN_REMAINING = Number(process.env.DISCORD_AGY_MIN_REMAINING ?? 0.1);
 // Antigravity の利用制限とみなすエラー文言
 const AGY_RATE_LIMIT_PATTERN =
   /RESOURCE_EXHAUSTED|rate[\s_-]?limit|quota|too many requests|usage limit|HTTP 429|利用制限|上限に達/i;
@@ -381,19 +383,88 @@ function findRateLimitInState(state, depth = 0) {
 }
 
 /**
- * Antigravity を先に使い、利用制限（または未設定）なら Claude へ引き継ぐ。
- * onSwitch は Claude へ切り替える直前に呼ばれる（Discord への途中経過通知用）。
+ * Antigravity の残り利用枠を取得する。
+ * AGY_MODEL が属するモデルグループ（Gemini か、Claude/GPT か）の各枠のうち、残りが最も少ないものを返す。
+ * 取得できなければ null（その場合は残量判定をせず Antigravity を試す）。
  */
-async function runAgentWithFallback(promptText, meta, onSwitch) {
-  let handoffNote = null;
-  let switchReason = null;
+async function fetchAgyQuota() {
+  try {
+    const res = await fetch(
+      `http://${AGY_LS_ADDRESS}/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Connect-Protocol-Version": "1",
+          "x-antigravity-csrf-token": AGY_CSRF_TOKEN,
+        },
+        body: "{}",
+        signal: AbortSignal.timeout(5000),
+      }
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const groups = (await res.json())?.response?.groups || [];
+    const groupPattern = /claude|gpt/i.test(AGY_MODEL) ? /claude|gpt/i : /gemini/i;
+    const group = groups.find((g) => groupPattern.test(g.displayName || "")) || groups[0];
 
+    let lowest = null;
+    for (const b of group?.buckets || []) {
+      const fraction = Number(b.remainingFraction);
+      if (!Number.isFinite(fraction)) continue;
+      if (!lowest || fraction < lowest.fraction) {
+        lowest = { fraction, label: b.displayName || b.bucketId, resetTime: b.resetTime || null };
+      }
+    }
+    return lowest;
+  } catch (err) {
+    console.warn("[DiscordHarness] Antigravity 残量取得失敗（残量判定なしで続行）:", err.message);
+    return null;
+  }
+}
+
+function formatResetTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+/**
+ * 最初にどちらのエージェントを使うかを決める。
+ * Antigravity が未設定・利用制限中・残り利用枠が AGY_MIN_REMAINING 以下なら Claude。
+ */
+async function chooseFirstAgent() {
   if (!isAntigravityAvailable()) {
-    switchReason = "Antigravity が未設定のため";
-  } else if (isAgyCoolingDown()) {
+    return { agent: "Claude", reason: "Antigravity が未設定のため" };
+  }
+  if (isAgyCoolingDown()) {
     const restMin = Math.ceil((AGY_COOLDOWN_MS - (Date.now() - agyRateLimitedAt)) / 60_000);
-    switchReason = `Antigravity が利用制限中のため（あと約 ${restMin} 分は Claude を使用）`;
-  } else {
+    return { agent: "Claude", reason: `Antigravity が利用制限中のため（あと約 ${restMin} 分は Claude を使用）` };
+  }
+  const quota = await fetchAgyQuota();
+  if (quota && quota.fraction <= AGY_MIN_REMAINING) {
+    const pct = (quota.fraction * 100).toFixed(1);
+    const reset = formatResetTime(quota.resetTime);
+    return {
+      agent: "Claude",
+      reason: `Antigravity の残り利用枠が少ないため（${quota.label}: ${pct}%${reset ? `、${reset} に回復` : ""}）`,
+      quota,
+    };
+  }
+  return { agent: "Antigravity", reason: null, quota };
+}
+
+/**
+ * Antigravity を先に使い、利用制限・残量不足（または未設定）なら Claude へ引き継ぐ。
+ * plan は chooseFirstAgent() の結果（省略時はここで決める）。
+ * onSwitch は Antigravity を試した後に Claude へ切り替える直前に呼ばれる（Discord への途中経過通知用）。
+ */
+async function runAgentWithFallback(promptText, meta, onSwitch, plan = null) {
+  plan ||= await chooseFirstAgent();
+  let handoffNote = null;
+  let switchReason = plan.reason;
+
+  if (plan.agent === "Antigravity") {
     try {
       const result = await runAntigravityPrompt(promptText, meta);
       agyRateLimitedAt = 0;
@@ -415,7 +486,8 @@ async function runAgentWithFallback(promptText, meta, onSwitch) {
     throw new Error(`${switchReason}処理できません（Claude 予備は DISCORD_CLAUDE_ENABLED=false で無効）。`);
   }
 
-  if (onSwitch) await onSwitch(switchReason);
+  // 最初から Claude で受け付けた場合は受付メッセージで理由を伝え済みなので、切り替え通知は出さない
+  if (onSwitch && plan.agent === "Antigravity") await onSwitch(switchReason);
   const result = await runClaudePrompt(promptText, meta, handoffNote);
   return { ...result, agent: "Claude" };
 }
@@ -485,6 +557,8 @@ function runClaudePrompt(promptText, meta, handoffNote) {
       reject(new Error(`Claude が異常終了しました (code=${code}): ${(stderr || stdout).trim().slice(0, 800)}`));
     });
 
+    // Claude が入力を読み切る前に終了した場合の EPIPE で Bot ごと落ちないようにする
+    child.stdin.on("error", (err) => console.warn("[DiscordHarness] Claude 標準入力エラー:", err.message));
     child.stdin.end(buildAgentPrompt(promptText, meta, handoffNote));
   });
 }
@@ -773,10 +847,15 @@ async function handleMessageCreate(msg) {
   }
 
   if (prompt === "!status") {
+    const quota = isAntigravityAvailable() ? await fetchAgyQuota() : null;
+    const quotaText = quota
+      ? `${(quota.fraction * 100).toFixed(1)}%（${quota.label}${quota.resetTime ? ` / ${formatResetTime(quota.resetTime)} に回復` : ""}、${(AGY_MIN_REMAINING * 100).toFixed(0)}% 以下で Claude へ迂回）`
+      : "取得できず";
     const statusText = [
       `**Discord Harness Status**`,
       `- Bot: \`${botTag}\``,
       `- Antigravity API: ${isAntigravityAvailable() ? (isAgyCoolingDown() ? "利用制限中（Claude へ迂回）" : "接続可能") : "未設定"}`,
+      `- Antigravity 残り利用枠: ${quotaText}`,
       `- Claude 予備: ${CLAUDE_ENABLED ? `有効（\`${CLAUDE_BIN}\` / ${CLAUDE_PERMISSION_MODE}${CLAUDE_MODEL ? ` / ${CLAUDE_MODEL}` : ""}）` : "無効"}`,
       `- 実行中タスク数: ${activeJobs}`,
       `- Antigravity モデル: \`${AGY_MODEL}\``,
@@ -794,8 +873,12 @@ async function handleMessageCreate(msg) {
   const typingTimer = setInterval(() => triggerTyping(msg.channel_id), 8000);
   try {
     await triggerTyping(msg.channel_id);
-    const firstAgent = isAntigravityAvailable() && !isAgyCoolingDown() ? "Antigravity" : "Claude";
-    await sendDiscordMessage(msg.channel_id, `受け付けました。会話履歴を確認して ${firstAgent} で処理しています…`, msg.id);
+    const plan = await chooseFirstAgent();
+    const acceptText =
+      plan.agent === "Claude" && plan.reason
+        ? `受け付けました。${plan.reason}、Claude で処理しています…`
+        : `受け付けました。会話履歴を確認して ${plan.agent} で処理しています…`;
+    await sendDiscordMessage(msg.channel_id, acceptText, msg.id);
 
     const ctx = await buildConversationContext(msg, referencedMessage);
     const { reply, agent } = await runAgentWithFallback(
@@ -809,10 +892,9 @@ async function handleMessageCreate(msg) {
         hasReference: ctx.hasReference,
       },
       async (reason) => {
-        // 最初から Claude で受け付けた場合は、二重に通知しない
-        if (firstAgent === "Claude") return;
         await sendDiscordMessage(msg.channel_id, `${reason}、Claude に切り替えて続けます…`, msg.id).catch(() => {});
-      }
+      },
+      plan
     );
 
     await sendDiscordMessage(msg.channel_id, agent === "Claude" ? `${reply}\n\n（処理: Claude）` : reply, msg.id);
