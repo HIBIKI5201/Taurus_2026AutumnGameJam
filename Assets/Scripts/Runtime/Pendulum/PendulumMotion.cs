@@ -26,7 +26,7 @@ namespace Taurus.Runtime.Pendulum
         private const double GRAVITY = 9.81;
         private const double DAMPING = 1.35;
 
-        // 親棒のピボットTransform（Z軸回転させる対象）
+        // 親棒のピボットTransform（Prefab ルートの Z 軸回りに回転させる対象。FBX のボーンも可）
         [SerializeField] private Transform _parentArm;
 
         // 二重振り子時の子棒ピボットTransform（親棒先端の子として配置。単振り子ではnull）
@@ -102,10 +102,19 @@ namespace Taurus.Runtime.Pendulum
             (_parentSchedule != null ? _parentSchedule.TotalExpectedTopCount : 0) +
             (_childSchedule != null ? _childSchedule.TotalExpectedTopCount : 0);
 
+        // アームの初期姿勢（ローカル回転）と、親空間で見た揺動軸。
+        // FBX のボーンは初期姿勢に回転が入っているため、角度は「初期姿勢に揺動軸回りの回転を足す」形で反映する。
+        private bool _hasRestPose;
+        private Quaternion _parentRestLocalRotation = Quaternion.identity;
+        private Quaternion _childRestLocalRotation = Quaternion.identity;
+        private Vector3 _parentSwingAxisLocal = Vector3.forward;
+        private Vector3 _childSwingAxisLocal = Vector3.forward;
+
         private void Awake()
         {
             _parentDetector.OnTopCrossed += HandleParentTopCrossed;
             _childDetector.OnTopCrossed += HandleChildTopCrossed;
+            CaptureRestPose();
         }
 
         private void OnDestroy()
@@ -120,6 +129,36 @@ namespace Taurus.Runtime.Pendulum
             _parentArm = parentArm;
             _childArm = childArm;
             _isDoublePendulum = isDouble;
+            CaptureRestPose();
+        }
+
+        /// <summary>
+        ///     現在のアーム姿勢を「θ = 0（真下）」の初期姿勢として記録する。
+        ///     揺動軸は Prefab ルートの Z 軸（画面奥行き方向）で、各アームの親空間に直して保持する。
+        /// </summary>
+        private void CaptureRestPose()
+        {
+            Vector3 swingAxisWorld = transform.forward;
+            if (_parentArm != null)
+            {
+                _parentRestLocalRotation = _parentArm.localRotation;
+                _parentSwingAxisLocal = ToParentSpace(_parentArm, swingAxisWorld);
+            }
+
+            if (_childArm != null)
+            {
+                _childRestLocalRotation = _childArm.localRotation;
+                _childSwingAxisLocal = ToParentSpace(_childArm, swingAxisWorld);
+            }
+
+            _hasRestPose = true;
+        }
+
+        private static Vector3 ToParentSpace(Transform arm, Vector3 worldDirection)
+        {
+            return arm.parent != null
+                ? Quaternion.Inverse(arm.parent.rotation) * worldDirection
+                : worldDirection;
         }
 
         /// <summary> Wave開始時にスケジュールをセットし、t=0 の初期姿勢へ反映する。 </summary>
@@ -249,10 +288,20 @@ namespace Taurus.Runtime.Pendulum
             }
         }
 
-        private static void ApplyArmRotation(Transform arm, double angleRad)
+        private void ApplyArmRotation(Transform arm, double angleRad)
         {
+            if (!_hasRestPose)
+            {
+                CaptureRestPose();
+            }
+
             float degrees = (float)(angleRad * Mathf.Rad2Deg);
-            arm.localRotation = Quaternion.Euler(0f, 0f, degrees);
+            bool isChild = arm == _childArm;
+            Vector3 axis = isChild ? _childSwingAxisLocal : _parentSwingAxisLocal;
+            Quaternion rest = isChild ? _childRestLocalRotation : _parentRestLocalRotation;
+
+            // 初期姿勢が無回転・軸がZのグレーボックスでは、従来の Quaternion.Euler(0, 0, θ) と同じ結果になる
+            arm.localRotation = Quaternion.AngleAxis(degrees, axis) * rest;
         }
 
         private void HandleParentTopCrossed(int crossedCount)
