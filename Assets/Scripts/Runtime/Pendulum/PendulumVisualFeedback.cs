@@ -6,9 +6,10 @@ namespace Taurus.Runtime.Pendulum
     /// 真上通過時に親玉（ライム #d5ff58）と子玉（コーラル #ff735b）を約 0.48 秒発光・拡大演出させるコンポーネント。
     /// PendulumMotion と同じ Prefab ルートにアタッチして使用する。
     ///
-    /// 【本番素材差し替え時の引き継ぎ】
-    /// - 現在は仮の SpriteRenderer の色変更と Transform スケール拡大で演出している。
-    /// - 本番 3D モデルやパーティクルへ差し替える場合は、HandleTopCrossed 内でパーティクル再生やマテリアル Emission 制御を追加する。
+    /// 【3D / 2D 両対応と引き継ぎポイント】
+    /// - 3D 仮グレーボックスおよび本番 3D モデル（MeshRenderer）では MaterialPropertyBlock で _BaseColor と _EmissionColor を更新する。
+    /// - 2D SpriteRenderer が設定されている場合も互換動作する。
+    /// - 本番パーティクル等を追加したい場合は、HandleTopCrossed 内で再生処理を追加する。
     /// </summary>
     [RequireComponent(typeof(PendulumMotion))]
     public class PendulumVisualFeedback : MonoBehaviour
@@ -16,18 +17,30 @@ namespace Taurus.Runtime.Pendulum
         // 仕様書第9章準拠：真上通過時の発光持続時間（秒）
         private const float FLASH_DURATION = 0.48f;
         private const float PEAK_SCALE_MULTIPLIER = 1.45f;
+        private const float EMISSION_INTENSITY = 2.4f;
 
-        private static readonly Color PARENT_BASE_COLOR = new Color(0.17f, 0.27f, 0.25f, 1f);
+        private static readonly int BASE_COLOR_ID = Shader.PropertyToID("_BaseColor");
+        private static readonly int COLOR_ID = Shader.PropertyToID("_Color");
+        private static readonly int EMISSION_COLOR_ID = Shader.PropertyToID("_EmissionColor");
+
+        private static readonly Color PARENT_BASE_COLOR = new Color(0.22f, 0.34f, 0.31f, 1f);
         private static readonly Color PARENT_FLASH_COLOR = new Color(0.835f, 1.0f, 0.345f, 1f); // #d5ff58（ライム）
-        private static readonly Color CHILD_BASE_COLOR = new Color(0.29f, 0.23f, 0.20f, 1f);
+        private static readonly Color CHILD_BASE_COLOR = new Color(0.36f, 0.27f, 0.24f, 1f);
         private static readonly Color CHILD_FLASH_COLOR = new Color(1.0f, 0.451f, 0.357f, 1f);  // #ff735b（コーラル）
 
+        [Header("Parent Bob（親玉）")]
         [SerializeField] private Transform _parentBob;
+        [SerializeField] private Renderer _parentBobMeshRenderer;
         [SerializeField] private SpriteRenderer _parentBobRenderer;
+
+        [Header("Child Bob（子玉：二重振り子のみ）")]
         [SerializeField] private Transform _childBob;
+        [SerializeField] private Renderer _childBobMeshRenderer;
         [SerializeField] private SpriteRenderer _childBobRenderer;
 
         private PendulumMotion _motion;
+        private MaterialPropertyBlock _parentPropBlock;
+        private MaterialPropertyBlock _childPropBlock;
         private Vector3 _parentBaseScale = Vector3.one;
         private Vector3 _childBaseScale = Vector3.one;
         private float _parentFlashTimer;
@@ -36,6 +49,9 @@ namespace Taurus.Runtime.Pendulum
         private void Awake()
         {
             _motion = GetComponent<PendulumMotion>();
+            _parentPropBlock = new MaterialPropertyBlock();
+            _childPropBlock = new MaterialPropertyBlock();
+
             if (_parentBob != null)
             {
                 _parentBaseScale = _parentBob.localScale;
@@ -60,7 +76,7 @@ namespace Taurus.Runtime.Pendulum
             }
         }
 
-        /// <summary> エディタ構築ツール（ProjectSceneSetupTool）から玉のTransformとRendererを設定する。 </summary>
+        /// <summary> エディタ構築ツール（ProjectSceneSetupTool）から2D玉の参照を設定する。 </summary>
         public void ConfigureBobs(
             Transform parentBob,
             SpriteRenderer parentRenderer,
@@ -73,6 +89,19 @@ namespace Taurus.Runtime.Pendulum
             _childBobRenderer = childRenderer;
         }
 
+        /// <summary> エディタ構築ツール（ProjectSceneSetupTool）から3D玉の参照を設定する。 </summary>
+        public void ConfigureMeshBobs(
+            Transform parentBob,
+            Renderer parentMeshRenderer,
+            Transform childBob,
+            Renderer childMeshRenderer)
+        {
+            _parentBob = parentBob;
+            _parentBobMeshRenderer = parentMeshRenderer;
+            _childBob = childBob;
+            _childBobMeshRenderer = childMeshRenderer;
+        }
+
         private void Update()
         {
             float dt = Time.unscaledDeltaTime;
@@ -80,13 +109,29 @@ namespace Taurus.Runtime.Pendulum
             if (_parentFlashTimer > 0f)
             {
                 _parentFlashTimer = Mathf.Max(0f, _parentFlashTimer - dt);
-                ApplyFlashVisual(_parentBob, _parentBobRenderer, _parentBaseScale, PARENT_BASE_COLOR, PARENT_FLASH_COLOR, _parentFlashTimer / FLASH_DURATION);
+                ApplyFlashVisual(
+                    _parentBob,
+                    _parentBobMeshRenderer,
+                    _parentBobRenderer,
+                    _parentPropBlock,
+                    _parentBaseScale,
+                    PARENT_BASE_COLOR,
+                    PARENT_FLASH_COLOR,
+                    _parentFlashTimer / FLASH_DURATION);
             }
 
             if (_childFlashTimer > 0f)
             {
                 _childFlashTimer = Mathf.Max(0f, _childFlashTimer - dt);
-                ApplyFlashVisual(_childBob, _childBobRenderer, _childBaseScale, CHILD_BASE_COLOR, CHILD_FLASH_COLOR, _childFlashTimer / FLASH_DURATION);
+                ApplyFlashVisual(
+                    _childBob,
+                    _childBobMeshRenderer,
+                    _childBobRenderer,
+                    _childPropBlock,
+                    _childBaseScale,
+                    CHILD_BASE_COLOR,
+                    CHILD_FLASH_COLOR,
+                    _childFlashTimer / FLASH_DURATION);
             }
         }
 
@@ -95,18 +140,36 @@ namespace Taurus.Runtime.Pendulum
             if (isChild)
             {
                 _childFlashTimer = FLASH_DURATION;
-                ApplyFlashVisual(_childBob, _childBobRenderer, _childBaseScale, CHILD_BASE_COLOR, CHILD_FLASH_COLOR, 1f);
+                ApplyFlashVisual(
+                    _childBob,
+                    _childBobMeshRenderer,
+                    _childBobRenderer,
+                    _childPropBlock,
+                    _childBaseScale,
+                    CHILD_BASE_COLOR,
+                    CHILD_FLASH_COLOR,
+                    1f);
             }
             else
             {
                 _parentFlashTimer = FLASH_DURATION;
-                ApplyFlashVisual(_parentBob, _parentBobRenderer, _parentBaseScale, PARENT_BASE_COLOR, PARENT_FLASH_COLOR, 1f);
+                ApplyFlashVisual(
+                    _parentBob,
+                    _parentBobMeshRenderer,
+                    _parentBobRenderer,
+                    _parentPropBlock,
+                    _parentBaseScale,
+                    PARENT_BASE_COLOR,
+                    PARENT_FLASH_COLOR,
+                    1f);
             }
         }
 
         private static void ApplyFlashVisual(
             Transform bob,
-            SpriteRenderer renderer,
+            Renderer meshRenderer,
+            SpriteRenderer spriteRenderer,
+            MaterialPropertyBlock propBlock,
             Vector3 baseScale,
             Color baseColor,
             Color flashColor,
@@ -120,9 +183,22 @@ namespace Taurus.Runtime.Pendulum
                 bob.localScale = baseScale * scaleFactor;
             }
 
-            if (renderer != null)
+            Color currentColor = Color.Lerp(baseColor, flashColor, ease);
+
+            // 3D MeshRenderer（URP Lit）は MaterialPropertyBlock で色と Emission を更新
+            if (meshRenderer != null && propBlock != null)
             {
-                renderer.color = Color.Lerp(baseColor, flashColor, ease);
+                meshRenderer.GetPropertyBlock(propBlock);
+                propBlock.SetColor(BASE_COLOR_ID, currentColor);
+                propBlock.SetColor(COLOR_ID, currentColor);
+                propBlock.SetColor(EMISSION_COLOR_ID, flashColor * (ease * EMISSION_INTENSITY));
+                meshRenderer.SetPropertyBlock(propBlock);
+            }
+
+            // 2D SpriteRenderer 互換
+            if (spriteRenderer != null)
+            {
+                spriteRenderer.color = currentColor;
             }
         }
     }
