@@ -14,13 +14,15 @@
  * 4. Antigravity が利用制限（レート制限・クォータ超過）に掛かった場合、または未設定の場合は、
  *    Claude Code CLI（`claude -p`）へ同じ依頼を引き継いで処理する（Antigravity 優先・Claude 予備）。
  *    利用制限を検知したら DISCORD_AGY_COOLDOWN_MS の間は Antigravity を飛ばして Claude を直接使う。
+ * 5. 依頼の処理が終わるたびに、リポジトリを main ブランチへ戻して origin から早送りで最新化する
+ *    （他の依頼が実行中なら最後の 1 件が終わるまで待つ。失敗したら Discord に警告を出す）。
  *
  * 【起動方法】
  *   node Tools/DiscordHarness/bot.mjs
  *   ※ .env に DISCORD_BOT_TOKEN=... を設定しておくこと。
  */
 
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -64,6 +66,9 @@ const MAX_HISTORY_CHARS = Math.max(1000, Number(process.env.DISCORD_MAX_HISTORY_
 const AGY_MODEL = (process.env.DISCORD_AGY_MODEL || "flash").trim();
 // 大きな実装＋Unity確認＋PR作成まで完了できるようデフォルト 30 分にする
 const REPLY_TIMEOUT_MS = Number(process.env.DISCORD_REPLY_TIMEOUT_MS || 1_800_000);
+// 作業が終わるたびにリポジトリを main ブランチへ戻すか（デフォルト true）と、戻す先のブランチ名
+const RETURN_TO_MAIN = (process.env.DISCORD_RETURN_TO_MAIN ?? "true").toLowerCase() !== "false";
+const MAIN_BRANCH = (process.env.DISCORD_MAIN_BRANCH || "main").trim();
 // RUN_STATE_IDLE を連続何回確認したら完了とみなすか（一時的なIDLE揺らぎでの誤終了防止）
 const IDLE_CONFIRM_POLLS = 2;
 
@@ -344,6 +349,7 @@ function buildAgentPrompt(promptText, meta, handoffNote = null) {
     "1. 会話履歴・返信対象メッセージを踏まえて対応する。",
     "2. コード・シーン・Prefab・設定などのファイル変更を伴うタスクを完了した場合は、必ず「対象ファイルのみをステージ → 作業ブランチ（feature/<作業名>/agent）へコミット＆プッシュ → main へ PR 作成（.github/PULL_REQUEST_TEMPLATE.md 準拠）」まで完了させてから最終回答する。",
     "3. 最終回答は Discord へそのまま返信されるため、実施内容・確認結果・作成した PR の URL を簡潔な日本語で必ず記載して終える（ツール実行だけで無言終了しないこと）。",
+    `4. 作業が終わるとハーネスがリポジトリを \`${MAIN_BRANCH}\` ブランチへ自動で戻す。作業ブランチの変更は終了前に必ずコミット＆プッシュしておく（未コミットのまま終えると \`${MAIN_BRANCH}\` 側へ持ち越される）。`,
   ];
 
   if (handoffNote) {
@@ -908,7 +914,83 @@ async function handleMessageCreate(msg) {
   } finally {
     clearInterval(typingTimer);
     activeJobs--;
+
+    // 作業が終わったらリポジトリを main へ戻す。
+    // 他の依頼が実行中のときは、その作業ブランチを奪わないよう最後の 1 件が終わるまで待つ。
+    if (RETURN_TO_MAIN) {
+      if (activeJobs > 0) {
+        console.log(`[DiscordHarness] 他に実行中の依頼が ${activeJobs} 件あるため、${MAIN_BRANCH} への切り替えは後回しにします`);
+      } else {
+        const result = await returnToMainBranch();
+        if (!result.ok) {
+          await sendDiscordMessage(
+            msg.channel_id,
+            `⚠ 作業後に \`${MAIN_BRANCH}\` へ戻せませんでした（現在: \`${result.branch || "不明"}\`）。\n${result.reason}`,
+            msg.id
+          ).catch(() => {});
+        }
+      }
+    }
   }
+}
+
+// ---------- 作業後の main 復帰 ----------
+function runGit(args) {
+  return new Promise((resolve) => {
+    // サブモジュールまで巻き込んで切り替えないよう submodule.recurse を無効にする
+    execFile("git", ["-c", "submodule.recurse=false", ...args], { cwd: REPO_ROOT, windowsHide: true }, (err, stdout, stderr) => {
+      resolve({ ok: !err, stdout: String(stdout || "").trim(), stderr: String(stderr || err?.message || "").trim() });
+    });
+  });
+}
+
+/**
+ * リポジトリを MAIN_BRANCH に戻し、origin から早送りで最新化する。
+ * 未コミットの変更は git の通常どおり持ち越す（衝突する場合は git が切り替えを拒否するので、その旨を返す）。
+ * 強制的な切り替え・変更の破棄はしない。
+ */
+async function returnToMainBranch() {
+  const head = await runGit(["rev-parse", "--abbrev-ref", "HEAD"]);
+  const branch = head.ok ? head.stdout : null;
+  if (!head.ok) {
+    return { ok: false, branch, reason: `現在のブランチを取得できません: ${head.stderr.slice(0, 300)}` };
+  }
+
+  // マージ・リベース・チェリーピックの途中なら触らない
+  const gitDir = await runGit(["rev-parse", "--git-dir"]);
+  if (gitDir.ok) {
+    const dir = path.resolve(REPO_ROOT, gitDir.stdout);
+    const inProgress = ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply"].find((name) =>
+      fs.existsSync(path.join(dir, name))
+    );
+    if (inProgress) {
+      return { ok: false, branch, reason: `git の操作途中（${inProgress}）のため切り替えていません。手動で完了または中止してください。` };
+    }
+  }
+
+  if (branch !== MAIN_BRANCH) {
+    const sw = await runGit(["switch", MAIN_BRANCH]);
+    if (!sw.ok) {
+      return {
+        ok: false,
+        branch,
+        reason: `\`git switch ${MAIN_BRANCH}\` が失敗しました（未コミットの変更が衝突している可能性があります）:\n\`\`\`\n${sw.stderr.slice(0, 600)}\n\`\`\``,
+      };
+    }
+    console.log(`[DiscordHarness] ${branch} → ${MAIN_BRANCH} に戻しました`);
+  }
+
+  const pull = await runGit(["pull", "--ff-only", "origin", MAIN_BRANCH]);
+  if (!pull.ok) {
+    // ブランチは main に戻せているので、最新化の失敗は警告に留める
+    return {
+      ok: false,
+      branch: MAIN_BRANCH,
+      reason: `\`${MAIN_BRANCH}\` には戻しましたが、\`git pull --ff-only\` に失敗しました:\n\`\`\`\n${pull.stderr.slice(0, 600)}\n\`\`\``,
+    };
+  }
+
+  return { ok: true, branch: MAIN_BRANCH, from: branch };
 }
 
 // ---------- Discord Gateway WebSocket 接続 ----------
@@ -1045,6 +1127,14 @@ function scheduleReconnect() {
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[DiscordHarness] UnhandledRejection:", reason);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("[DiscordHarness] UncaughtException:", err);
+});
 
 process.on("SIGINT", () => {
   stopHeartbeat();

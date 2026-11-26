@@ -23,6 +23,15 @@ Claude はリポジトリ直下で起動します。Claude Code CLI がインス
 Discord 経由の依頼なので全許可（`bypassPermissions`）にはしていません。編集の自動承認（`acceptEdits`）と、許可ツールの明示（`DISCORD_CLAUDE_ALLOWED_TOOLS`）に留めています。
 許可リストにないコマンドは実行されません。Claude に必要な操作が増えたら、この許可リストに足してください。
 
+## 作業後は main に戻る
+依頼の処理が終わるたびに、ハーネスがリポジトリを `main` に戻します（`git switch main` → `git pull --ff-only origin main`）。成功・失敗・エラーのどれで終わっても同じです。
+
+- ほかの依頼が実行中のときは、その作業ブランチを奪わないよう、最後の 1 件が終わってから戻します。
+- 未コミットの変更は、git の通常の動きどおり `main` へ持ち越します。変更を捨てたり、強制的に切り替えたりはしません。
+  - 変更が衝突して切り替えられないときは、Discord に警告を出します。マージやリベースの途中のときも同じです。
+- エージェントには「作業ブランチの変更は終える前にコミット＆プッシュする」よう指示しています。
+- 無効にするなら `DISCORD_RETURN_TO_MAIN=false`、戻す先を変えるなら `DISCORD_MAIN_BRANCH` を設定します。
+
 ## 1. Discord Developer Portal 側の事前設定
 1. Bot を作成したアプリの **Bot** タブを開く。
 2. **Privileged Gateway Intents** の **`MESSAGE CONTENT INTENT`** を **ON** にして保存する。
@@ -60,6 +69,10 @@ DISCORD_BOT_TOKEN=ここにBotのトークンを貼る
 
 # 利用制限を検知した後、Antigravity を飛ばして Claude を使う期間（ミリ秒、デフォルト 30 分）
 # DISCORD_AGY_COOLDOWN_MS=1800000
+
+# 作業後に戻すブランチ（無効にするなら DISCORD_RETURN_TO_MAIN=false）
+# DISCORD_RETURN_TO_MAIN=true
+# DISCORD_MAIN_BRANCH=main
 
 # Claude 予備の設定
 # DISCORD_CLAUDE_ENABLED=true
