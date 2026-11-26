@@ -349,6 +349,7 @@ MonoBehaviour:
   _glowAreaScale: 1.5
   _glowDuration: 0.55
   _pressedScale: 0.86
+  _hoverScale: 1.05
   _bounceDuration: 0.35
 --- !u!1 &66996597
 GameObject:
@@ -363,6 +364,7 @@ GameObject:
   - component: {fileID: 66996599}
   - component: {fileID: 66996598}
   - component: {fileID: 66996602}
+  - component: {fileID: 66996603}
   m_Layer: 0
   m_Name: TitleStartButton
   m_TagString: Untagged
@@ -486,6 +488,26 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Taurus.Runtime.UI.UISkinImage
   _slot: 11
   _isResetColorWhenApplied: 1
+--- !u!114 &66996603
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 66996597}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7cb314c7e1416734fba03d01bc114441, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Taurus.Runtime.UI.ButtonPressEffect
+  _sourceImage: {fileID: 66996599}
+  _glowMaterial: {fileID: 2100000, guid: 298a6d3ecd40b314f9d54f0f92399ed7, type: 2}
+  _glowColor: {r: 1.5, g: 1.2, b: 0.9, a: 1}
+  _glowAreaScale: 1.35
+  _glowDuration: 0.55
+  _pressedScale: 0.9
+  _hoverScale: 1.05
+  _bounceDuration: 0.35
 --- !u!1 &80800811
 GameObject:
   m_ObjectHideFlags: 0
@@ -2702,6 +2724,7 @@ GameObject:
   - component: {fileID: 867744167}
   - component: {fileID: 867744166}
   - component: {fileID: 867744165}
+  - component: {fileID: 867744169}
   m_Layer: 0
   m_Name: QuitButton
   m_TagString: Untagged
@@ -2811,6 +2834,26 @@ RectTransform:
   m_AnchoredPosition: {x: 800, y: -470}
   m_SizeDelta: {x: 220, y: 64}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &867744169
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 867744164}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7cb314c7e1416734fba03d01bc114441, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Taurus.Runtime.UI.ButtonPressEffect
+  _sourceImage: {fileID: 867744166}
+  _glowMaterial: {fileID: 2100000, guid: 298a6d3ecd40b314f9d54f0f92399ed7, type: 2}
+  _glowColor: {r: 1.5, g: 1.2, b: 0.9, a: 1}
+  _glowAreaScale: 1.35
+  _glowDuration: 0.55
+  _pressedScale: 0.9
+  _hoverScale: 1.05
+  _bounceDuration: 0.35
 --- !u!1 &885795092
 GameObject:
   m_ObjectHideFlags: 0
@@ -6854,6 +6897,7 @@ GameObject:
   - component: {fileID: 1920333021}
   - component: {fileID: 1920333020}
   - component: {fileID: 1920333019}
+  - component: {fileID: 1920333023}
   m_Layer: 0
   m_Name: HomeButton
   m_TagString: Untagged
@@ -6964,6 +7008,26 @@ RectTransform:
   m_AnchoredPosition: {x: 322, y: -110}
   m_SizeDelta: {x: 200, y: 190}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &1920333023
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1920333018}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7cb314c7e1416734fba03d01bc114441, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Taurus.Runtime.UI.ButtonPressEffect
+  _sourceImage: {fileID: 676373974}
+  _glowMaterial: {fileID: 2100000, guid: 298a6d3ecd40b314f9d54f0f92399ed7, type: 2}
+  _glowColor: {r: 1.5, g: 1.2, b: 0.9, a: 1}
+  _glowAreaScale: 1.35
+  _glowDuration: 0.55
+  _pressedScale: 0.88
+  _hoverScale: 1.05
+  _bounceDuration: 0.35
 --- !u!1 &1951057249
 GameObject:
   m_ObjectHideFlags: 0
@@ -7684,6 +7748,7 @@ MonoBehaviour:
   _glowAreaScale: 1.5
   _glowDuration: 0.55
   _pressedScale: 0.86
+  _hoverScale: 1.05
   _bounceDuration: 0.35
 --- !u!1 &2095689273
 GameObject:
@@ -7777,6 +7842,7 @@ GameObject:
   - component: {fileID: 2096692381}
   - component: {fileID: 2096692380}
   - component: {fileID: 2096692382}
+  - component: {fileID: 2096692383}
   m_Layer: 0
   m_Name: RetryButton
   m_TagString: Untagged
@@ -7887,6 +7953,26 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
+--- !u!114 &2096692383
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2096692378}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7cb314c7e1416734fba03d01bc114441, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Taurus.Runtime.UI.ButtonPressEffect
+  _sourceImage: {fileID: 1120739613}
+  _glowMaterial: {fileID: 2100000, guid: 298a6d3ecd40b314f9d54f0f92399ed7, type: 2}
+  _glowColor: {r: 0.35, g: 0.9, b: 1.4, a: 1}
+  _glowAreaScale: 1.35
+  _glowDuration: 0.55
+  _pressedScale: 0.88
+  _hoverScale: 1.05
+  _bounceDuration: 0.35
 --- !u!1 &2098458478
 GameObject:
   m_ObjectHideFlags: 0
@@ -7900,6 +7986,7 @@ GameObject:
   - component: {fileID: 2098458480}
   - component: {fileID: 2098458479}
   - component: {fileID: 2098458483}
+  - component: {fileID: 2098458484}
   m_Layer: 0
   m_Name: RulesStartButton
   m_TagString: Untagged
@@ -8023,6 +8110,26 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Taurus.Runtime.UI.UISkinImage
   _slot: 11
   _isResetColorWhenApplied: 1
+--- !u!114 &2098458484
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2098458478}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7cb314c7e1416734fba03d01bc114441, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Taurus.Runtime.UI.ButtonPressEffect
+  _sourceImage: {fileID: 2098458480}
+  _glowMaterial: {fileID: 2100000, guid: 298a6d3ecd40b314f9d54f0f92399ed7, type: 2}
+  _glowColor: {r: 1.5, g: 1.2, b: 0.9, a: 1}
+  _glowAreaScale: 1.35
+  _glowDuration: 0.55
+  _pressedScale: 0.9
+  _hoverScale: 1.05
+  _bounceDuration: 0.35
 --- !u!1 &2102274271
 GameObject:
   m_ObjectHideFlags: 0
