@@ -32,6 +32,23 @@ namespace Taurus.Editor.Inspectors
         private string _simSummary = string.Empty;
         private bool _showRawInspector = true;
 
+        [MenuItem("Taurus/Stage/Apply Optimal 15-Wave Preset")]
+        public static void ApplyOptimal15WavePresetToProjectAsset()
+        {
+            StageDefinition def = AssetDatabase.LoadAssetAtPath<StageDefinition>("Assets/Settings/StageDefinition.asset");
+            if (def == null)
+            {
+                Debug.LogError("[StageDefinitionEditor] Assets/Settings/StageDefinition.asset が見つかりません。");
+                return;
+            }
+
+            Undo.RecordObject(def, "Apply Optimal 15-Wave Preset");
+            def.ApplyOptimal15WavePreset();
+            EditorUtility.SetDirty(def);
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[StageDefinitionEditor] StageDefinition.asset に最適 15-Wave プリセットを適用・保存しました（Waves={def.Waves.Count}）。");
+        }
+
         public override void OnInspectorGUI()
         {
             StageDefinition def = (StageDefinition)target;
@@ -79,7 +96,8 @@ namespace Taurus.Editor.Inspectors
                     waves[i],
                     def.PeakWeight,
                     def.MultiPendulumPenalty,
-                    def.DoublePendulumPenalty);
+                    def.DoublePendulumPenalty,
+                    def.TriplePendulumPenalty);
                 maxY = Mathf.Max(maxY, (float)reports[i].BlendedDifficultyScore, (float)reports[i].L2RmsDensity, (float)reports[i].PeakDensity);
                 if (!reports[i].AllConstraintsFeasible)
                 {
@@ -132,11 +150,12 @@ namespace Taurus.Editor.Inspectors
                 wave,
                 def.PeakWeight,
                 def.MultiPendulumPenalty,
-                def.DoublePendulumPenalty);
+                def.DoublePendulumPenalty,
+                def.TriplePendulumPenalty);
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUILayout.LabelField(
-                $"Wave {_selectedWaveIndex + 1} 詳細（単:{wave.SinglePendulumCount} / 二重:{wave.DoublePendulumCount} / 総玉数:{report.TotalBobCount} / 構成負荷倍率:×{report.StructureDifficultyMultiplier:0.00} / 終了:{wave.StopRule}）",
+                $"Wave {_selectedWaveIndex + 1} 詳細（単:{wave.SinglePendulumCount} / 二重:{wave.DoublePendulumCount} / 三重:{wave.TriplePendulumCount} / 総玉数:{report.TotalBobCount} / 構成負荷倍率:×{report.StructureDifficultyMultiplier:0.00} / 終了:{wave.StopRule}）",
                 EditorStyles.boldLabel);
 
             if (wave.TotalPendulumCount > 2)
@@ -393,6 +412,18 @@ namespace Taurus.Editor.Inspectors
 
         private void DrawUtilityButtons(StageDefinition def)
         {
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("UX論文準拠 15Wave 最適プリセットを適用"))
+            {
+                Undo.RecordObject(def, "Apply Optimal 15-Wave Preset");
+                def.ApplyOptimal15WavePreset();
+                EditorUtility.SetDirty(def);
+                serializedObject.Update();
+                _selectedWaveIndex = 0;
+                _simSummary = string.Empty;
+            }
+
+            EditorGUILayout.EndHorizontal();
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("デフォルト Wave 1〜8 で初期化"))
             {

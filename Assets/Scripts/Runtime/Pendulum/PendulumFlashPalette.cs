@@ -13,5 +13,7 @@ namespace Taurus.Runtime.Pendulum
         public static readonly Color ParentFlashColor = new Color(0.90f, 1.0f, 0.10f, 1f); // 高彩度ライム
         public static readonly Color ChildBaseColor = new Color(0.36f, 0.27f, 0.24f, 1f);
         public static readonly Color ChildFlashColor = new Color(1.0f, 0.22f, 0.05f, 1f); // 高彩度オレンジ
+        public static readonly Color GrandchildBaseColor = new Color(0.20f, 0.30f, 0.38f, 1f);
+        public static readonly Color GrandchildFlashColor = new Color(0.10f, 0.92f, 1.0f, 1f); // 高彩度シアン（三重振り子・孫玉）
     }
 }

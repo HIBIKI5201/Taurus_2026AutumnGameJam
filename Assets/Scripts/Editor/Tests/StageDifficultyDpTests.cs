@@ -1,6 +1,9 @@
+using System;
 using NUnit.Framework;
+using Taurus.Runtime.Game;
 using Taurus.Runtime.Pendulum;
 using Taurus.Runtime.Stage;
+using Taurus.Runtime.UI;
 
 namespace Taurus.Editor.Tests
 {
@@ -249,6 +252,184 @@ namespace Taurus.Editor.Tests
             Assert.IsTrue(report.Intervals[1].HasValidPath);
             Assert.IsFalse(report.WaveConstraintFeasible);
             Assert.IsFalse(report.AllConstraintsFeasible);
+        }
+
+        [Test]
+        public void InitialDirection_AlwaysMovesTowardBottomByGravity()
+        {
+            WaveConfig wave1 = StageDefinition.GetDefaultWaveConfig(1);
+            for (uint i = 0; i < 100u; i++)
+            {
+                MotionSchedule schedule = MotionScheduleGenerator.Generate(3000u + i * 7919u, wave1);
+                Assert.Greater(schedule.Segments.Count, 0);
+                MotionSegment first = schedule.Segments[0];
+                double sinTheta = Math.Sin(first.StartAngle);
+                if (Math.Abs(sinTheta) > 1e-4)
+                {
+                    int expectedDir = sinTheta > 0.0 ? -1 : 1;
+                    Assert.AreEqual(expectedDir, first.Direction, $"seed={3000u + i * 7919u}, angle={first.StartAngle}");
+                }
+            }
+        }
+
+        [Test]
+        public void TriplePendulum_StructureDifficulty_OrdersHigherThanDouble()
+        {
+            // 全玉合計期待量をすべて 12.0 に揃えて、3重×1 が 2重×1 より高く、3重×2 が 2重×2 より高いことを検証
+            WaveConfig double1 = new WaveConfig(0, 1, new[] { new StageIntervalConfig("d1", 8f, new[] { new WeightedCountChoice(25, 0), new WeightedCountChoice(75, 1) }) });
+            WaveConfig triple1 = new WaveConfig(0, 0, new[] { new StageIntervalConfig("t1", 8f, new[] { new WeightedCountChoice(50, 0), new WeightedCountChoice(50, 1) }) }, triplePendulumCount: 1);
+            WaveConfig double2 = new WaveConfig(0, 2, new[] { new StageIntervalConfig("d2", 8f, new[] { new WeightedCountChoice(62, 0), new WeightedCountChoice(38, 1) }) });
+            WaveConfig triple2 = new WaveConfig(0, 0, new[] { new StageIntervalConfig("t2", 8f, new[] { new WeightedCountChoice(75, 0), new WeightedCountChoice(25, 1) }) }, triplePendulumCount: 2);
+
+            WaveDifficultyReport rD1 = StageDifficultyEvaluator.EvaluateWave(double1);
+            WaveDifficultyReport rT1 = StageDifficultyEvaluator.EvaluateWave(triple1);
+            WaveDifficultyReport rD2 = StageDifficultyEvaluator.EvaluateWave(double2);
+            WaveDifficultyReport rT2 = StageDifficultyEvaluator.EvaluateWave(triple2);
+
+            Assert.Greater(rT1.StructureDifficultyMultiplier, rD1.StructureDifficultyMultiplier);
+            Assert.Greater(rT2.StructureDifficultyMultiplier, rD2.StructureDifficultyMultiplier);
+            Assert.Greater(rT1.BlendedDifficultyScore, rD1.BlendedDifficultyScore);
+            Assert.Greater(rT2.BlendedDifficultyScore, rD2.BlendedDifficultyScore);
+        }
+
+        [Test]
+        public void Optimal15WavePreset_AllWavesFeasibleAndSatisfyCurveProfiles()
+        {
+            WaveConfig[] waves = StageDefinition.CreateOptimal15Waves();
+            Assert.AreEqual(15, waves.Length);
+
+            for (int i = 0; i < waves.Length; i++)
+            {
+                WaveDifficultyReport report = StageDifficultyEvaluator.EvaluateWave(waves[i]);
+                Assert.IsTrue(report.AllConstraintsFeasible, $"Wave {i + 1} is infeasible");
+                Assert.IsTrue(report.UseWaveQuantityConstraint, $"Wave {i + 1} should use wave constraint");
+                Assert.GreaterOrEqual(report.WaveMinQuantity, 1, $"Wave {i + 1} must guarantee Q_min >= 1");
+
+                // ランタイム生成でも親区間制約を 100% 満たすことを複数シードで検証
+                for (uint s = 0; s < 10u; s++)
+                {
+                    MotionSchedule schedule = MotionScheduleGenerator.Generate(5000u + (uint)(i * 100) + s * 7919u, waves[i]);
+                    Assert.GreaterOrEqual(schedule.TotalExpectedTopCount, report.WaveMinQuantity);
+                    Assert.LessOrEqual(schedule.TotalExpectedTopCount, report.WaveMaxQuantity);
+                }
+            }
+
+            // 二次曲線型（W6）は L2 RMS 密度が台形平均密度を大きく上回り、平坦型（W4）はほぼ一致する
+            WaveDifficultyReport w4Flat = StageDifficultyEvaluator.EvaluateWave(waves[3]);
+            WaveDifficultyReport w6Quad = StageDifficultyEvaluator.EvaluateWave(waves[5]);
+            Assert.Less(w4Flat.L2RmsDensity - w4Flat.TrapezoidalAverageDensity, 0.01);
+            Assert.Greater(w6Quad.L2RmsDensity - w6Quad.TrapezoidalAverageDensity, 0.05);
+        }
+
+        [Test]
+        public void AudioSilenceTrimAndResultRank_WorkAsExpected()
+        {
+            // 先頭 4 フレーム無音、5 フレーム目（index 4）で発音開始する2chサンプル
+            float[] samples = new float[10 * 2];
+            samples[4 * 2] = 0.25f;
+            Assert.AreEqual(4, GameAudioHooks.FindFirstAudibleFrame(samples, 2, 0.015f));
+
+            StringAssert.Contains("S RANK", HUDController.FormatResultRankLabel(15, true));
+            StringAssert.Contains("NEW RECORD", HUDController.FormatResultRankLabel(15, true));
+            StringAssert.Contains("A RANK", HUDController.FormatResultRankLabel(10, false));
+            StringAssert.Contains("B RANK", HUDController.FormatResultRankLabel(4, false));
+            StringAssert.Contains("TRY AGAIN", HUDController.FormatResultRankLabel(0, false));
+        }
+
+        [Test]
+        public void ProjectStageDefinitionAsset_AllWavesGenerateFull8SecondsAndNeverZero()
+        {
+            StageDefinition asset = UnityEditor.AssetDatabase.LoadAssetAtPath<StageDefinition>("Assets/Settings/StageDefinition.asset");
+            Assert.IsNotNull(asset, "Assets/Settings/StageDefinition.asset が存在すること");
+            Assert.GreaterOrEqual(asset.Waves.Count, 8);
+
+            for (int w = 1; w <= asset.Waves.Count; w++)
+            {
+                WaveConfig config = asset.GetWaveConfig(w);
+                WaveDifficultyReport report = asset.EvaluateWave(w);
+                Assert.AreEqual(8f, report.TotalDuration, 1e-3f, $"Wave {w} の期間が 8 秒であること");
+                Assert.IsTrue(report.AllConstraintsFeasible, $"Wave {w} の制約が到達可能であること");
+
+                int nonZeroCount = 0;
+                for (uint s = 0; s < 20u; s++)
+                {
+                    MotionSchedule schedule = MotionScheduleGenerator.Generate(9000u + (uint)(w * 100) + s * 7919u, config);
+                    Assert.AreEqual(8, schedule.Segments.Count, $"Wave {w} は 8 秒分のセグメントを生成すること");
+                    if (schedule.TotalExpectedTopCount > 0)
+                    {
+                        nonZeroCount++;
+                    }
+                }
+
+                Assert.AreEqual(20, nonZeroCount, $"Wave {w} は全シードで 0 回にならないこと（最低1回保証）");
+            }
+        }
+
+        [Test]
+        public void DistinctInitialAngles_TwoPendulumsStartOppositeDirectionsAndSeparated()
+        {
+            WaveConfig wave4 = StageDefinition.CreateOptimal15Waves()[3];
+            for (uint i = 0; i < 50u; i++)
+            {
+                uint seed1 = unchecked(7000u + i * 2654435761u);
+                uint seed2 = unchecked(7000u + i * 2246822519u + 17u);
+
+                MotionSchedule first = MotionScheduleGenerator.Generate(seed1, wave4);
+                double firstAngle = first.Segments[0].StartAngle;
+                MotionSchedule second = MotionScheduleGenerator.Generate(seed2, wave4, new[] { firstAngle });
+                double secondAngle = second.Segments[0].StartAngle;
+
+                // 2本目の初動方向が1本目と逆になり、初期位置が十分離れていることを検証
+                if (Math.Abs(Math.Sin(firstAngle)) > 0.05)
+                {
+                    Assert.AreEqual(-first.Segments[0].Direction, second.Segments[0].Direction, $"trial={i}");
+                }
+
+                double diff = Math.Abs(((secondAngle - firstAngle + Math.PI) % (Math.PI * 2.0) + Math.PI * 2.0) % (Math.PI * 2.0) - Math.PI);
+                Assert.GreaterOrEqual(diff, 0.5, $"trial={i}, diff={diff}");
+            }
+        }
+
+        [Test]
+        public void AntiSyncActiveSlots_SignificantlyReducesSimultaneousTopCrossings()
+        {
+            // 二重振り子（Wave 7）で、親玉と子玉の同時発光スロット数が無対策時より大幅に減少することを100試行で検証
+            WaveConfig wave7 = StageDefinition.CreateOptimal15Waves()[6];
+            int naiveOverlaps = 0;
+            int antiSyncOverlaps = 0;
+
+            for (uint i = 0; i < 100u; i++)
+            {
+                uint pSeed = unchecked(12000u + i * 2654435761u);
+                uint cSeed = unchecked(12000u + i * 2246822519u + 31u);
+
+                MotionSchedule parent = MotionScheduleGenerator.Generate(pSeed, wave7);
+                MotionSchedule childNaive = MotionScheduleGenerator.Generate(cSeed, wave7);
+
+                int[] parentSlots = new int[8];
+                for (int s = 0; s < parent.Segments.Count && s < 8; s++)
+                {
+                    if (parent.Segments[s].ExpectedTopCount > 0) parentSlots[s] = 1;
+                }
+
+                MotionSchedule childAntiSync = MotionScheduleGenerator.Generate(cSeed, wave7, new[] { parent.Segments[0].StartAngle }, parentSlots);
+
+                // 制約が引き続き厳密に守られていること
+                Assert.GreaterOrEqual(childAntiSync.TotalExpectedTopCount, wave7.WaveMinQuantity);
+                Assert.LessOrEqual(childAntiSync.TotalExpectedTopCount, wave7.WaveMaxQuantity);
+
+                for (int s = 0; s < 8; s++)
+                {
+                    if (parent.Segments[s].ExpectedTopCount > 0)
+                    {
+                        if (childNaive.Segments[s].ExpectedTopCount > 0) naiveOverlaps++;
+                        if (childAntiSync.Segments[s].ExpectedTopCount > 0) antiSyncOverlaps++;
+                    }
+                }
+            }
+
+            // ソフトペナルティにより同時発光回数が無対策時の半分以下に減少することを検証
+            Assert.Less(antiSyncOverlaps * 2, naiveOverlaps, $"naive={naiveOverlaps}, antiSync={antiSyncOverlaps}");
         }
     }
 }

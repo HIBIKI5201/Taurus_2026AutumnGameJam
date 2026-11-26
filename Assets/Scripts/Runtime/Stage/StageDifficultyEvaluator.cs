@@ -18,7 +18,8 @@ namespace Taurus.Runtime.Stage
             WaveConfig config,
             float peakWeight = 0.35f,
             float multiPendulumPenalty = 0.25f,
-            float doublePendulumPenalty = 0.50f)
+            float doublePendulumPenalty = 0.50f,
+            float triplePendulumPenalty = 1.10f)
         {
             if (config == null)
             {
@@ -85,12 +86,13 @@ namespace Taurus.Runtime.Stage
             double clampedPeakWeight = Mathf.Clamp01(peakWeight);
             double singleBobScore = (1.0 - clampedPeakWeight) * avgDensity + clampedPeakWeight * l2RmsDensity;
 
-            // 構成負荷倍率：同じ総量でも 1重×1 < 1重×2 < 2重×1 < 2重×2 となるよう複数本・二重振り子の認知負荷を反映
+            // 構成負荷倍率：同じ総量でも 1重×1 < 1重×2 < 2重×1 < 2重×2 < 3重×1 < 3重×2 となるよう複数本・多段振り子の認知負荷を反映
             int extraPendulums = Math.Max(0, config.TotalPendulumCount - 1);
             int doubleCount = Math.Max(0, config.DoublePendulumCount);
+            int tripleCount = Math.Max(0, config.TriplePendulumCount);
             double multiFactor = 1.0 + Math.Max(0.0, multiPendulumPenalty) * extraPendulums;
-            double doubleFactor = 1.0 + Math.Max(0.0, doublePendulumPenalty) * doubleCount;
-            double structureMultiplier = multiFactor * doubleFactor;
+            double chainFactor = 1.0 + Math.Max(0.0, doublePendulumPenalty) * doubleCount + Math.Max(0.0, triplePendulumPenalty) * tripleCount;
+            double structureMultiplier = multiFactor * chainFactor;
 
             double blendedScore = singleBobScore * Math.Max(1, config.TotalBobCount) * structureMultiplier;
 

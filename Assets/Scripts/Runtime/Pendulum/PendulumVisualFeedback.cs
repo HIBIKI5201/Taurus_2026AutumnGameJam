@@ -31,24 +31,33 @@ namespace Taurus.Runtime.Pendulum
         [SerializeField] private Renderer _parentBobMeshRenderer;
         [SerializeField] private SpriteRenderer _parentBobRenderer;
 
-        [Header("Child Bob（子玉：二重振り子のみ）")]
+        [Header("Child Bob（子玉：二重・三重振り子）")]
         [SerializeField] private Transform _childBob;
         [SerializeField] private Renderer _childBobMeshRenderer;
         [SerializeField] private SpriteRenderer _childBobRenderer;
 
+        [Header("Grandchild Bob（孫玉：三重振り子のみ）")]
+        [SerializeField] private Transform _grandchildBob;
+        [SerializeField] private Renderer _grandchildBobMeshRenderer;
+        [SerializeField] private SpriteRenderer _grandchildBobRenderer;
+
         private PendulumMotion _motion;
         private MaterialPropertyBlock _parentPropBlock;
         private MaterialPropertyBlock _childPropBlock;
+        private MaterialPropertyBlock _grandchildPropBlock;
         private Vector3 _parentBaseScale = Vector3.one;
         private Vector3 _childBaseScale = Vector3.one;
+        private Vector3 _grandchildBaseScale = Vector3.one;
         private float _parentFlashTimer;
         private float _childFlashTimer;
+        private float _grandchildFlashTimer;
 
         private void Awake()
         {
             _motion = GetComponent<PendulumMotion>();
             _parentPropBlock = new MaterialPropertyBlock();
             _childPropBlock = new MaterialPropertyBlock();
+            _grandchildPropBlock = new MaterialPropertyBlock();
 
             if (_parentBob != null)
             {
@@ -60,13 +69,19 @@ namespace Taurus.Runtime.Pendulum
                 _childBaseScale = _childBob.localScale;
             }
 
+            if (_grandchildBob != null)
+            {
+                _grandchildBaseScale = _grandchildBob.localScale;
+            }
+
             // URP Lit 等はマテリアル側で _EMISSION キーワードが有効でないと _EmissionColor を無視するため確実に有効化する
             EnableEmissionKeyword(_parentBobMeshRenderer);
             EnableEmissionKeyword(_childBobMeshRenderer);
+            EnableEmissionKeyword(_grandchildBobMeshRenderer);
 
             if (_motion != null)
             {
-                _motion.OnTopCrossed += HandleTopCrossed;
+                _motion.OnBobTopCrossed += HandleBobTopCrossed;
             }
         }
 
@@ -74,8 +89,32 @@ namespace Taurus.Runtime.Pendulum
         {
             if (_motion != null)
             {
-                _motion.OnTopCrossed -= HandleTopCrossed;
+                _motion.OnBobTopCrossed -= HandleBobTopCrossed;
             }
+        }
+
+        /// <summary> ランタイム拡張で生成された三重振り子・孫玉の参照を登録する。 </summary>
+        public void ConfigureGrandchildMeshBob(Transform grandchildBob, Renderer grandchildMeshRenderer)
+        {
+            _grandchildBob = grandchildBob;
+            _grandchildBobMeshRenderer = grandchildMeshRenderer;
+            if (_grandchildBob != null)
+            {
+                _grandchildBaseScale = _grandchildBob.localScale;
+            }
+
+            _grandchildPropBlock ??= new MaterialPropertyBlock();
+            EnableEmissionKeyword(_grandchildBobMeshRenderer);
+            ApplyFlashVisual(
+                _grandchildBob,
+                _grandchildBobMeshRenderer,
+                _grandchildBobRenderer,
+                _grandchildPropBlock,
+                _grandchildBaseScale,
+                PendulumFlashPalette.GrandchildBaseColor,
+                PendulumFlashPalette.GrandchildFlashColor,
+                0f,
+                _emissionIntensity);
         }
 
         /// <summary> エディタ構築ツール（ProjectSceneSetupTool）から2D玉の参照を設定する。 </summary>
@@ -137,11 +176,40 @@ namespace Taurus.Runtime.Pendulum
                     _childFlashTimer / FLASH_DURATION,
                     _emissionIntensity);
             }
+
+            if (_grandchildFlashTimer > 0f)
+            {
+                _grandchildFlashTimer = Mathf.Max(0f, _grandchildFlashTimer - dt);
+                ApplyFlashVisual(
+                    _grandchildBob,
+                    _grandchildBobMeshRenderer,
+                    _grandchildBobRenderer,
+                    _grandchildPropBlock,
+                    _grandchildBaseScale,
+                    PendulumFlashPalette.GrandchildBaseColor,
+                    PendulumFlashPalette.GrandchildFlashColor,
+                    _grandchildFlashTimer / FLASH_DURATION,
+                    _emissionIntensity);
+            }
         }
 
-        private void HandleTopCrossed(PendulumMotion pendulum, bool isChild, int crossedCount)
+        private void HandleBobTopCrossed(PendulumMotion pendulum, int bobTier, int crossedCount)
         {
-            if (isChild)
+            if (bobTier == 2)
+            {
+                _grandchildFlashTimer = FLASH_DURATION;
+                ApplyFlashVisual(
+                    _grandchildBob,
+                    _grandchildBobMeshRenderer,
+                    _grandchildBobRenderer,
+                    _grandchildPropBlock,
+                    _grandchildBaseScale,
+                    PendulumFlashPalette.GrandchildBaseColor,
+                    PendulumFlashPalette.GrandchildFlashColor,
+                    1f,
+                    _emissionIntensity);
+            }
+            else if (bobTier == 1)
             {
                 _childFlashTimer = FLASH_DURATION;
                 ApplyFlashVisual(

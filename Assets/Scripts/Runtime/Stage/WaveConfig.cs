@@ -21,6 +21,9 @@ namespace Taurus.Runtime.Stage
         // 二重振り子（2重：親玉＋子玉の2玉）の配置本数（StageAnchorの支点は最大2本）
         [SerializeField, Range(0, 2)] private int _doublePendulumCount;
 
+        // 三重振り子（3重：親玉＋子玉＋孫玉の3玉）の配置本数（StageAnchorの支点は最大2本）
+        [SerializeField, Range(0, 2)] private int _triplePendulumCount;
+
         [Header("期間・DP設定")]
         // 評価・抽選期間の開始時刻 s（秒）
         [SerializeField, Min(0f)] private float _startTimeSeconds = 0f;
@@ -58,17 +61,24 @@ namespace Taurus.Runtime.Stage
         /// <summary> 二重振り子の本数。 </summary>
         public int DoublePendulumCount => _doublePendulumCount;
 
-        /// <summary> 振り子の合計本数（支点の数）。 </summary>
-        public int TotalPendulumCount => _singlePendulumCount + _doublePendulumCount;
+        /// <summary> 三重振り子の本数。 </summary>
+        public int TriplePendulumCount => _triplePendulumCount;
 
-        /// <summary> カウント対象となる玉の合計数（単振り子1玉＋二重振り子2玉）。 </summary>
-        public int TotalBobCount => _singlePendulumCount + _doublePendulumCount * 2;
+        /// <summary> 振り子の合計本数（支点の数）。 </summary>
+        public int TotalPendulumCount => _singlePendulumCount + _doublePendulumCount + _triplePendulumCount;
+
+        /// <summary> カウント対象となる玉の合計数（単振り子1玉＋二重振り子2玉＋三重振り子3玉）。 </summary>
+        public int TotalBobCount => _singlePendulumCount + _doublePendulumCount * 2 + _triplePendulumCount * 3;
+
+        private const float DEFAULT_DURATION_SECONDS = 8f;
 
         /// <summary> 期間開始時刻 s（秒）。 </summary>
         public float StartTimeSeconds => Mathf.Max(0f, _startTimeSeconds);
 
-        /// <summary> 期間終了時刻 e（秒）。 </summary>
-        public float EndTimeSeconds => Mathf.Max(StartTimeSeconds + 0.1f, _endTimeSeconds);
+        /// <summary> 期間終了時刻 e（秒）。旧アセット由来で未シリアライズ（0以下）の場合はデフォルト8秒として扱う。 </summary>
+        public float EndTimeSeconds => _endTimeSeconds > 0f
+            ? Mathf.Max(StartTimeSeconds + 0.1f, _endTimeSeconds)
+            : StartTimeSeconds + DEFAULT_DURATION_SECONDS;
 
         /// <summary> 抽選終了ルール。 </summary>
         public DrawStopRule StopRule => _stopRule;
@@ -444,10 +454,12 @@ namespace Taurus.Runtime.Stage
             StageIntervalConfig[] intervals,
             DrawStopRule stopRule = DrawStopRule.StopWhenNoFit,
             float timeQuantizationStep = 1.0f,
-            float startTimeSeconds = 0f)
+            float startTimeSeconds = 0f,
+            int triplePendulumCount = 0)
         {
             _singlePendulumCount = singlePendulumCount;
             _doublePendulumCount = doublePendulumCount;
+            _triplePendulumCount = triplePendulumCount;
             _intervals = intervals;
             _stopRule = stopRule;
             _timeQuantizationStep = timeQuantizationStep;

@@ -47,6 +47,9 @@ namespace Taurus.Runtime.Game
         // 二重振り子（2重）Prefab。PendulumMotion がアタッチされていること
         [SerializeField] private PendulumMotion _doublePendulumPrefab;
 
+        // 三重振り子（3重）Prefab。未設定時は _doublePendulumPrefab をランタイム拡張して3段目を自動生成する
+        [SerializeField] private PendulumMotion _triplePendulumPrefab;
+
         [Header("Debug / Seed Override")]
         // true にすると毎回 _fixedSeed を使って同一パターンを再現できる（QA・再現テスト用）
         [SerializeField] private bool _useFixedSeed;
@@ -391,45 +394,104 @@ namespace Taurus.Runtime.Game
 
             int singleCount = config.SinglePendulumCount;
             int doubleCount = config.DoublePendulumCount;
-            int totalCount = singleCount + doubleCount;
+            int tripleCount = config.TriplePendulumCount;
+            int totalCount = singleCount + doubleCount + tripleCount;
             float now = Time.unscaledTime;
 
             int expectedTotal = 0;
+            // 複数振り子・多段玉の間で初期位置と真上通過タイミング（発光）がシンクロしないよう既出情報を記録する
+            List<double> usedInitialAngles = new List<double>(6);
+            int slotCapacity = Mathf.Max(8, Mathf.CeilToInt((config.EndTimeSeconds - config.StartTimeSeconds) / config.TimeQuantizationStep) + 2);
+            int[] occupiedActiveSlots = new int[slotCapacity];
 
             for (int i = 0; i < totalCount; i++)
             {
-                bool isDouble = i >= singleCount;
-                PendulumMotion prefab = isDouble ? _doublePendulumPrefab : _singlePendulumPrefab;
+                bool isTriple = i >= singleCount + doubleCount;
+                bool isDouble = !isTriple && i >= singleCount;
+
+                PendulumMotion prefab = isTriple
+                    ? (_triplePendulumPrefab != null ? _triplePendulumPrefab : _doublePendulumPrefab)
+                    : (isDouble ? _doublePendulumPrefab : _singlePendulumPrefab);
                 if (prefab == null)
                 {
-                    Debug.LogError($"[{nameof(GameController)}] {(isDouble ? "Double" : "Single")} 振り子Prefabが未設定です。", this);
+                    Debug.LogError($"[{nameof(GameController)}] {(isTriple ? "Triple" : (isDouble ? "Double" : "Single"))} 振り子Prefabが未設定です。", this);
                     continue;
                 }
 
                 Transform pivot = anchor != null ? anchor.GetPivot(i, totalCount) : parentRoot;
                 PendulumMotion instance = Instantiate(prefab, pivot.position, Quaternion.LookRotation(Vector3.back, Vector3.up), parentRoot);
-                instance.name = isDouble ? $"PendulumDouble_{i + 1:00}" : $"PendulumSingle_{i + 1:00}";
+                instance.name = isTriple
+                    ? $"PendulumTriple_{i + 1:00}"
+                    : (isDouble ? $"PendulumDouble_{i + 1:00}" : $"PendulumSingle_{i + 1:00}");
 
-                // HTML参照実装と同じシード導出式：Wave番号と玉インデックスから素数オフセットで独立シードを作る
-                int ix = _currentWave * 17 + i * 2 + 1;
-                uint parentSeed = unchecked(_runSeed + (uint)(ix * 7919));
-                MotionSchedule parentSchedule = MotionScheduleGenerator.Generate(parentSeed, config);
+                if (isTriple && instance.EnsureGrandchildRig(out Transform grandBob, out Renderer grandRenderer))
+                {
+                    PendulumVisualFeedback feedback = instance.GetComponent<PendulumVisualFeedback>();
+                    if (feedback != null)
+                    {
+                        feedback.ConfigureGrandchildMeshBob(grandBob, grandRenderer);
+                    }
+                }
+
+                // 玉ごとに十分独立したシードを導出し、既出初期角度・既出通過スロットを避けて非同期に生成する
+                int ix = _currentWave * 17 + i * 3 + 1;
+                uint parentSeed = unchecked(_runSeed ^ (uint)(ix * 2654435761u));
+                MotionSchedule parentSchedule = MotionScheduleGenerator.Generate(parentSeed, config, usedInitialAngles, occupiedActiveSlots);
+                RecordScheduleUsage(parentSchedule, config.TimeQuantizationStep, usedInitialAngles, occupiedActiveSlots);
 
                 MotionSchedule childSchedule = null;
-                if (isDouble)
+                if (isDouble || isTriple)
                 {
-                    uint childSeed = unchecked(_runSeed + (uint)((ix + 1) * 7919));
-                    childSchedule = MotionScheduleGenerator.Generate(childSeed, config);
+                    uint childSeed = unchecked(_runSeed ^ (uint)((ix + 1) * 2246822519u));
+                    childSchedule = MotionScheduleGenerator.Generate(childSeed, config, usedInitialAngles, occupiedActiveSlots);
+                    RecordScheduleUsage(childSchedule, config.TimeQuantizationStep, usedInitialAngles, occupiedActiveSlots);
+                }
+
+                MotionSchedule grandchildSchedule = null;
+                if (isTriple)
+                {
+                    uint grandchildSeed = unchecked(_runSeed ^ (uint)((ix + 2) * 3266489917u));
+                    grandchildSchedule = MotionScheduleGenerator.Generate(grandchildSeed, config, usedInitialAngles, occupiedActiveSlots);
+                    RecordScheduleUsage(grandchildSchedule, config.TimeQuantizationStep, usedInitialAngles, occupiedActiveSlots);
                 }
 
                 instance.OnTopCrossed += HandlePendulumTopCrossed;
-                instance.Initialize(i, parentSchedule, childSchedule, now);
+                instance.Initialize(i, parentSchedule, childSchedule, now, grandchildSchedule);
 
                 expectedTotal += instance.TotalExpectedTopCount;
                 _activePendulums.Add(instance);
             }
 
             _expectedCount = expectedTotal;
+        }
+
+        private static void RecordScheduleUsage(
+            MotionSchedule schedule,
+            float stepSeconds,
+            List<double> usedInitialAngles,
+            int[] occupiedActiveSlots)
+        {
+            if (schedule == null || schedule.Segments == null || schedule.Segments.Count == 0)
+            {
+                return;
+            }
+
+            usedInitialAngles.Add(schedule.Segments[0].StartAngle);
+            float safeStep = Mathf.Clamp(stepSeconds > 0f ? stepSeconds : 1f, 0.1f, 2f);
+            for (int s = 0; s < schedule.Segments.Count; s++)
+            {
+                MotionSegment seg = schedule.Segments[s];
+                if (seg.ExpectedTopCount <= 0)
+                {
+                    continue;
+                }
+
+                int slot = Mathf.RoundToInt((float)(seg.StartTime / safeStep));
+                if (slot >= 0 && slot < occupiedActiveSlots.Length)
+                {
+                    occupiedActiveSlots[slot]++;
+                }
+            }
         }
 
         private void AddPlayerCount(int delta)

@@ -27,11 +27,20 @@ namespace Taurus.Runtime.Pendulum
         // Wave開始時の初期角度のsinθ上限：sin(π/√3) ≈ 0.971（水平付近の極端な初期姿勢を避ける）
         private static readonly double INITIAL_SIN_LIMIT = Math.Sin(Math.PI / Math.Sqrt(3.0));
 
+        // 他の玉（親玉・他振り子）が真上通過する予定の時刻スロットでは、同時発光シンクロを抑えるため回転候補の重みを減衰させる
+        private const double OVERLAP_TOP_CROSSING_WEIGHT_FACTOR = 0.12;
+
         /// <summary>
         /// WaveConfig の分割区間・量制約 [Q_min, Q_max]・終了ルールに従い、
         /// 後ろ向きDP（w'_i = w_i * can_reach[t + t_i, q + q_i]）で制約を守りつつ決定論的スケジュールを生成する。
+        /// avoidInitialAngles を渡すと初期位置・初動方向を分散し、
+        /// avoidActiveSlots を渡すと他玉と同じ時刻スロットで同時発光する頻度を抑制する。
         /// </summary>
-        public static MotionSchedule Generate(uint seed, WaveConfig waveConfig)
+        public static MotionSchedule Generate(
+            uint seed,
+            WaveConfig waveConfig,
+            IReadOnlyList<double> avoidInitialAngles = null,
+            IReadOnlyList<int> avoidActiveSlots = null)
         {
             if (waveConfig == null)
             {
@@ -83,6 +92,8 @@ namespace Taurus.Runtime.Pendulum
                     waveConfig.TimeQuantizationStep,
                     useWaveConstraint,
                     waveCanReach,
+                    avoidInitialAngles,
+                    avoidActiveSlots,
                     out MotionSchedule schedule))
                 {
                     return schedule;
@@ -123,18 +134,21 @@ namespace Taurus.Runtime.Pendulum
             float timeStepSeconds,
             bool useWaveConstraint,
             bool[,] waveCanReach,
+            IReadOnlyList<double> avoidInitialAngles,
+            IReadOnlyList<int> avoidActiveSlots,
             out MotionSchedule schedule)
         {
             uint state = seed;
             List<MotionSegment> segments = new List<MotionSegment>(16);
 
-            int direction = NextRandom01(ref state) < 0.5 ? 1 : -1;
-            double rotation = SampleInitialRotation(ref state);
+            double rotation = SampleDistinctInitialRotation(ref state, avoidInitialAngles);
+            int direction = DetermineGravityInitialDirection(rotation, ref state);
 
             double elapsedCursor = 0.0;
             int totalCount = 0;
             float stepSec = Mathf.Clamp(timeStepSeconds > 0f ? timeStepSeconds : 1.0f, 0.1f, 2.0f);
             int waveMaxTrackedQ = waveCanReach != null ? waveCanReach.GetLength(1) - 1 : 0;
+            int globalTimeStep = 0;
 
             for (int k = 0; k < intervals.Count; k++)
             {
@@ -196,6 +210,10 @@ namespace Taurus.Runtime.Pendulum
 
                 while (currentT < maxT)
                 {
+                    int overlapCount = (avoidActiveSlots != null && globalTimeStep >= 0 && globalTimeStep < avoidActiveSlots.Count)
+                        ? avoidActiveSlots[globalTimeStep]
+                        : 0;
+
                     if (!TryPickChoiceWithBackwardDp(
                         ref state,
                         choices,
@@ -209,6 +227,7 @@ namespace Taurus.Runtime.Pendulum
                         stepSec,
                         stopRule,
                         enforceConstraint,
+                        overlapCount,
                         out WeightedCountChoice choice,
                         out bool shouldStop))
                     {
@@ -254,6 +273,7 @@ namespace Taurus.Runtime.Pendulum
                     elapsedCursor += segDuration;
                     totalCount += choice.TopCount;
                     currentT += choiceSteps;
+                    globalTimeStep += choiceSteps;
                     currentQ += Math.Max(0, choice.TopCount);
                     rotation = endAngle;
                     direction = -direction;
@@ -281,6 +301,7 @@ namespace Taurus.Runtime.Pendulum
             float stepSec,
             DrawStopRule stopRule,
             bool enforceConstraint,
+            int overlapCount,
             out WeightedCountChoice picked,
             out bool shouldStop)
         {
@@ -342,6 +363,12 @@ namespace Taurus.Runtime.Pendulum
                     }
                 }
 
+                // 同時発光シンクロ抑制：既に他玉が真上通過する予定のスロットでは、回転候補（TopCount > 0）の重みを減衰させる
+                if (adjustedWeight > 0.0 && !isOverflow && overlapCount > 0 && c.TopCount > 0)
+                {
+                    adjustedWeight *= Math.Pow(OVERLAP_TOP_CROSSING_WEIGHT_FACTOR, overlapCount);
+                }
+
                 weights[i] = adjustedWeight;
                 totalAdjustedWeight += adjustedWeight;
             }
@@ -397,8 +424,8 @@ namespace Taurus.Runtime.Pendulum
             List<MotionSegment> segments = new List<MotionSegment>(plannedSeconds);
             int remaining = plannedSeconds;
 
-            int direction = NextRandom01(ref state) < 0.5 ? 1 : -1;
             double rotation = SampleInitialRotation(ref state);
+            int direction = DetermineGravityInitialDirection(rotation, ref state);
 
             int totalCount = 0;
 
@@ -444,6 +471,85 @@ namespace Taurus.Runtime.Pendulum
 
             schedule = new MotionSchedule(segments.ToArray(), totalCount, rotation, seed);
             return true;
+        }
+
+        /// <summary>
+        /// 初手の回転方向を重力方向に整合させる。
+        /// θ=0 が真下のため、sinθ &gt; 0（右側）なら -1、sinθ &lt; 0（左側）なら +1 として必ず最下点側へ落ち始める。
+        /// </summary>
+        private static int DetermineGravityInitialDirection(double initialRotation, ref uint state)
+        {
+            double sinTheta = Math.Sin(initialRotation);
+            if (Math.Abs(sinTheta) < 1e-6)
+            {
+                return NextRandom01(ref state) < 0.5 ? 1 : -1;
+            }
+
+            return sinTheta > 0.0 ? -1 : 1;
+        }
+
+        /// <summary>
+        /// 既出の初期角度群（他振り子・親玉等）と初期位置・左右方向が被らないように複数候補から最も離れた角度を選ぶ。
+        /// 複数振り子時に同じ動きへシンクロするのを防ぐ。
+        /// </summary>
+        private static double SampleDistinctInitialRotation(ref uint state, IReadOnlyList<double> avoidAngles)
+        {
+            if (avoidAngles == null || avoidAngles.Count == 0)
+            {
+                return SampleInitialRotation(ref state);
+            }
+
+            const int CANDIDATE_COUNT = 16;
+            double lastAngle = avoidAngles[avoidAngles.Count - 1];
+            double lastSin = Math.Sin(lastAngle);
+            double lastCos = Math.Cos(lastAngle);
+
+            double bestAngle = SampleInitialRotation(ref state);
+            double bestScore = double.NegativeInfinity;
+
+            for (int c = 0; c < CANDIDATE_COUNT; c++)
+            {
+                double candidate = c == 0 ? bestAngle : SampleInitialRotation(ref state);
+                double candSin = Math.Sin(candidate);
+                double candCos = Math.Cos(candidate);
+
+                // 既出角度すべてとの最小円周距離
+                double minAngularDist = Math.PI;
+                for (int i = 0; i < avoidAngles.Count; i++)
+                {
+                    double diff = Math.Abs(WrapToPi(candidate - avoidAngles[i]));
+                    if (diff < minAngularDist)
+                    {
+                        minAngularDist = diff;
+                    }
+                }
+
+                // 直前の玉と左右反対側（初動方向が逆）であることを強く優先し、上下（cos符号）の違いも加点する
+                double oppositeSideBonus = (candSin * lastSin < -0.02) ? 2.5 : 0.0;
+                double oppositeHalfBonus = (candCos * lastCos < 0.0) ? 0.45 : 0.0;
+                // 真下・真上付近（sin≈0）を避けて左右差を明確にする
+                double sideClarity = Math.Abs(candSin) * 0.35;
+
+                double score = minAngularDist + oppositeSideBonus + oppositeHalfBonus + sideClarity;
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestAngle = candidate;
+                }
+            }
+
+            return bestAngle;
+        }
+
+        private static double WrapToPi(double angleRad)
+        {
+            double wrapped = (angleRad + Math.PI) % TWO_PI;
+            if (wrapped < 0.0)
+            {
+                wrapped += TWO_PI;
+            }
+
+            return wrapped - Math.PI;
         }
 
         private static double SampleInitialRotation(ref uint state)

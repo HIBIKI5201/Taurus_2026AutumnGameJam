@@ -84,11 +84,14 @@ namespace Taurus.Runtime.Stage
         // 総合難易度スコアにおける L2 ピーク評価の重み（0=平均密度のみ, 1=L2ピークのみ）
         [SerializeField, Range(0f, 1f)] private float _peakWeight = 0.35f;
 
-        // 複数本の振り子を同時視認する際の追加負荷係数（本数が1本増えるごとの加算倍率）
-        [SerializeField, Min(0f)] private float _multiPendulumPenalty = 0.25f;
+        // 複数本の振り子を同時視認する際の追加負荷係数（独立・非同期動作の分割注意負荷を反映）
+        [SerializeField, Min(0f)] private float _multiPendulumPenalty = 0.40f;
 
         // 二重振り子（親玉に連動する子玉の追従負荷）の追加負荷係数（二重振り子1本ごとの加算倍率）
         [SerializeField, Min(0f)] private float _doublePendulumPenalty = 0.50f;
+
+        // 三重振り子（3段連鎖の追従負荷）の追加負荷係数（三重振り子1本ごとの加算倍率）
+        [SerializeField, Min(0f)] private float _triplePendulumPenalty = 1.10f;
 
         [Header("Wave 定義")]
         // インスペクターでバランス調整したい場合はここを編集する（空なら DEFAULT_WAVES が使われる）
@@ -103,10 +106,13 @@ namespace Taurus.Runtime.Stage
         /// <summary> 二重振り子の追従負荷ペナルティ係数。 </summary>
         public float DoublePendulumPenalty => Mathf.Max(0f, _doublePendulumPenalty);
 
+        /// <summary> 三重振り子の追従負荷ペナルティ係数。 </summary>
+        public float TriplePendulumPenalty => Mathf.Max(0f, _triplePendulumPenalty);
+
         /// <summary> 定義済み Wave 一覧（未設定時はデフォルト8 Waveを返す）。 </summary>
         public IReadOnlyList<WaveConfig> Waves => (_waves != null && _waves.Length > 0) ? _waves : DEFAULT_WAVES;
 
-        /// <summary> 指定Wave番号（1始まり）の構成を取得する。Wave 8以降は末尾（Wave 8）の設定を返す。 </summary>
+        /// <summary> 指定Wave番号（1始まり）の構成を取得する。定義数を超える場合は末尾の設定を返す。 </summary>
         public WaveConfig GetWaveConfig(int wave)
         {
             WaveConfig[] table = (_waves != null && _waves.Length > 0) ? _waves : DEFAULT_WAVES;
@@ -121,7 +127,8 @@ namespace Taurus.Runtime.Stage
                 GetWaveConfig(wave),
                 PeakWeight,
                 MultiPendulumPenalty,
-                DoublePendulumPenalty);
+                DoublePendulumPenalty,
+                TriplePendulumPenalty);
         }
 
         /// <summary> 仕様書準拠のデフォルトWave設定を取得する（テストやアセット未割り当て時のフォールバック用）。 </summary>
@@ -158,6 +165,132 @@ namespace Taurus.Runtime.Stage
             }
 
             _waves = copy;
+        }
+
+        /// <summary>
+        /// UX論文知見（平坦型=簡単・線形増加型=チュートリアル的・二次曲線型=高難度スパイク）と
+        /// Discord 感情曲線（Wave 1〜15・三重振り子含む）に加え、
+        /// 複数振り子の独立・非同期初期位置による認知負荷増を相殺するようカウント量と頻度を抑えた最適 15 Wave プリセットを適用する。
+        /// </summary>
+        public void ApplyOptimal15WavePreset()
+        {
+            _multiPendulumPenalty = 0.40f;
+            _waves = CreateOptimal15Waves();
+        }
+
+        /// <summary> UX論文＋Discord感情曲線＋独立初期位置負荷調整に基づく最適 15 Wave 定義を生成する。 </summary>
+        public static WaveConfig[] CreateOptimal15Waves()
+        {
+            return new[]
+            {
+                // W01: 平坦型（超簡単・導入 / 1重×1）
+                BuildWave(1, 0, 0, 1, 3, new[]
+                {
+                    new StageIntervalConfig("前半(平坦)", 4f, new[] { new WeightedCountChoice(76, 0), new WeightedCountChoice(24, 1) }, true, 0, 2),
+                    new StageIntervalConfig("後半(平坦)", 4f, new[] { new WeightedCountChoice(74, 0), new WeightedCountChoice(26, 1) }, true, 1, 2),
+                }),
+                // W02: 線形増加型（チュートリアル的 / 1重×1）
+                BuildWave(1, 0, 0, 2, 5, new[]
+                {
+                    new StageIntervalConfig("序盤(低)", 3f, new[] { new WeightedCountChoice(78, 0), new WeightedCountChoice(22, 1) }, true, 0, 1),
+                    new StageIntervalConfig("中盤(中)", 3f, new[] { new WeightedCountChoice(62, 0), new WeightedCountChoice(33, 1), new WeightedCountChoice(5, 2) }, true, 1, 2),
+                    new StageIntervalConfig("終盤(高)", 2f, new[] { new WeightedCountChoice(48, 0), new WeightedCountChoice(40, 1), new WeightedCountChoice(12, 2) }, true, 1, 2),
+                }),
+                // W03: 線形増加型（チュートリアル仕上げ / 1重×1）
+                BuildWave(1, 0, 0, 3, 6, new[]
+                {
+                    new StageIntervalConfig("序盤(低)", 3f, new[] { new WeightedCountChoice(68, 0), new WeightedCountChoice(28, 1), new WeightedCountChoice(4, 2) }, true, 1, 2),
+                    new StageIntervalConfig("中盤(中)", 3f, new[] { new WeightedCountChoice(54, 0), new WeightedCountChoice(34, 1), new WeightedCountChoice(12, 2) }, true, 1, 2),
+                    new StageIntervalConfig("終盤(高)", 2f, new[] { new WeightedCountChoice(40, 0), new WeightedCountChoice(38, 1), new WeightedCountChoice(18, 2), new WeightedCountChoice(4, 3) }, true, 1, 3),
+                }),
+                // W04: 平坦型（振り子×2初登場・独立動作に合わせて頻度軽減 / 1重×2）
+                BuildWave(2, 0, 0, 1, 3, new[]
+                {
+                    new StageIntervalConfig("前半(平坦)", 4f, new[] { new WeightedCountChoice(76, 0), new WeightedCountChoice(22, 1), new WeightedCountChoice(2, 2) }, true, 0, 2),
+                    new StageIntervalConfig("後半(平坦)", 4f, new[] { new WeightedCountChoice(74, 0), new WeightedCountChoice(24, 1), new WeightedCountChoice(2, 2) }, true, 1, 2),
+                }),
+                // W05: 線形増加型（振り子×2加速・独立動作調整 / 1重×2）
+                BuildWave(2, 0, 0, 2, 4, new[]
+                {
+                    new StageIntervalConfig("序盤(低)", 3f, new[] { new WeightedCountChoice(76, 0), new WeightedCountChoice(24, 1) }, true, 0, 1),
+                    new StageIntervalConfig("中盤(中)", 3f, new[] { new WeightedCountChoice(62, 0), new WeightedCountChoice(32, 1), new WeightedCountChoice(6, 2) }, true, 1, 2),
+                    new StageIntervalConfig("終盤(高)", 2f, new[] { new WeightedCountChoice(48, 0), new WeightedCountChoice(40, 1), new WeightedCountChoice(12, 2) }, true, 1, 2),
+                }),
+                // W06: 二次曲線型（振り子×2「難・一度目の死」 / 1重×2）
+                BuildWave(2, 0, 0, 3, 5, new[]
+                {
+                    new StageIntervalConfig("序盤(静)", 3f, new[] { new WeightedCountChoice(76, 0), new WeightedCountChoice(24, 1) }, true, 0, 1),
+                    new StageIntervalConfig("中盤(加速)", 3f, new[] { new WeightedCountChoice(56, 0), new WeightedCountChoice(34, 1), new WeightedCountChoice(10, 2) }, true, 1, 2),
+                    new StageIntervalConfig("終盤(急騰)", 2f, new[] { new WeightedCountChoice(28, 0), new WeightedCountChoice(40, 1), new WeightedCountChoice(24, 2), new WeightedCountChoice(8, 3) }, true, 2, 3),
+                }),
+                // W07: 平坦型（易・二重振り子初登場 / 2重×1）
+                BuildWave(0, 1, 0, 2, 3, new[]
+                {
+                    new StageIntervalConfig("前半(平坦)", 4f, new[] { new WeightedCountChoice(74, 0), new WeightedCountChoice(24, 1), new WeightedCountChoice(2, 2) }, true, 1, 2),
+                    new StageIntervalConfig("後半(平坦)", 4f, new[] { new WeightedCountChoice(72, 0), new WeightedCountChoice(26, 1), new WeightedCountChoice(2, 2) }, true, 1, 2),
+                }),
+                // W08: 線形増加型（二重・横ばい帯① / 2重×1）
+                BuildWave(0, 1, 0, 2, 4, new[]
+                {
+                    new StageIntervalConfig("序盤(低)", 3f, new[] { new WeightedCountChoice(78, 0), new WeightedCountChoice(22, 1) }, true, 0, 1),
+                    new StageIntervalConfig("中盤(中)", 3f, new[] { new WeightedCountChoice(64, 0), new WeightedCountChoice(32, 1), new WeightedCountChoice(4, 2) }, true, 1, 2),
+                    new StageIntervalConfig("終盤(高)", 2f, new[] { new WeightedCountChoice(50, 0), new WeightedCountChoice(40, 1), new WeightedCountChoice(10, 2) }, true, 1, 2),
+                }),
+                // W09: 線形増加型（二重・横ばい帯② / 2重×1）
+                BuildWave(0, 1, 0, 2, 4, new[]
+                {
+                    new StageIntervalConfig("序盤(低)", 3f, new[] { new WeightedCountChoice(74, 0), new WeightedCountChoice(26, 1) }, true, 0, 1),
+                    new StageIntervalConfig("中盤(中)", 3f, new[] { new WeightedCountChoice(58, 0), new WeightedCountChoice(34, 1), new WeightedCountChoice(8, 2) }, true, 1, 2),
+                    new StageIntervalConfig("終盤(高)", 2f, new[] { new WeightedCountChoice(44, 0), new WeightedCountChoice(42, 1), new WeightedCountChoice(14, 2) }, true, 1, 2),
+                }),
+                // W10: 二次曲線型（二重・溜め / 2重×1）
+                BuildWave(0, 1, 0, 3, 5, new[]
+                {
+                    new StageIntervalConfig("序盤(静)", 3f, new[] { new WeightedCountChoice(76, 0), new WeightedCountChoice(24, 1) }, true, 0, 1),
+                    new StageIntervalConfig("中盤(加速)", 3f, new[] { new WeightedCountChoice(56, 0), new WeightedCountChoice(34, 1), new WeightedCountChoice(10, 2) }, true, 1, 2),
+                    new StageIntervalConfig("終盤(急騰)", 2f, new[] { new WeightedCountChoice(32, 0), new WeightedCountChoice(42, 1), new WeightedCountChoice(20, 2), new WeightedCountChoice(6, 3) }, true, 2, 3),
+                }),
+                // W11: 平坦型（💀×2初登場・4玉独立動作に合わせて頻度抑制 / 2重×2）
+                BuildWave(0, 2, 0, 1, 3, new[]
+                {
+                    new StageIntervalConfig("前半(平坦)", 4f, new[] { new WeightedCountChoice(76, 0), new WeightedCountChoice(22, 1), new WeightedCountChoice(2, 2) }, true, 0, 2),
+                    new StageIntervalConfig("後半(平坦)", 4f, new[] { new WeightedCountChoice(74, 0), new WeightedCountChoice(24, 1), new WeightedCountChoice(2, 2) }, true, 1, 2),
+                }),
+                // W12: 二次曲線型（💀×2猛攻 / 2重×2）
+                BuildWave(0, 2, 0, 2, 4, new[]
+                {
+                    new StageIntervalConfig("序盤(静)", 3f, new[] { new WeightedCountChoice(78, 0), new WeightedCountChoice(22, 1) }, true, 0, 1),
+                    new StageIntervalConfig("中盤(加速)", 3f, new[] { new WeightedCountChoice(62, 0), new WeightedCountChoice(32, 1), new WeightedCountChoice(6, 2) }, true, 1, 2),
+                    new StageIntervalConfig("終盤(急騰)", 2f, new[] { new WeightedCountChoice(40, 0), new WeightedCountChoice(42, 1), new WeightedCountChoice(18, 2) }, true, 1, 2),
+                }),
+                // W13: 平坦型（三重振り子初登場 / 3重×1 + 1重×1）
+                BuildWave(1, 0, 1, 2, 3, new[]
+                {
+                    new StageIntervalConfig("前半(平坦)", 4f, new[] { new WeightedCountChoice(74, 0), new WeightedCountChoice(24, 1), new WeightedCountChoice(2, 2) }, true, 1, 2),
+                    new StageIntervalConfig("後半(平坦)", 4f, new[] { new WeightedCountChoice(72, 0), new WeightedCountChoice(26, 1), new WeightedCountChoice(2, 2) }, true, 1, 2),
+                }),
+                // W14: 二次曲線型（三重＋二重 / 3重×1 + 2重×1）
+                BuildWave(0, 1, 1, 2, 4, new[]
+                {
+                    new StageIntervalConfig("序盤(静)", 3f, new[] { new WeightedCountChoice(80, 0), new WeightedCountChoice(20, 1) }, true, 0, 1),
+                    new StageIntervalConfig("中盤(加速)", 3f, new[] { new WeightedCountChoice(64, 0), new WeightedCountChoice(30, 1), new WeightedCountChoice(6, 2) }, true, 1, 2),
+                    new StageIntervalConfig("終盤(急騰)", 2f, new[] { new WeightedCountChoice(42, 0), new WeightedCountChoice(42, 1), new WeightedCountChoice(16, 2) }, true, 1, 2),
+                }),
+                // W15: 二次曲線型（三重×2 Final Peak / 3重×2）
+                BuildWave(0, 0, 2, 2, 4, new[]
+                {
+                    new StageIntervalConfig("序盤(静)", 3f, new[] { new WeightedCountChoice(82, 0), new WeightedCountChoice(18, 1) }, true, 0, 1),
+                    new StageIntervalConfig("中盤(加速)", 3f, new[] { new WeightedCountChoice(66, 0), new WeightedCountChoice(28, 1), new WeightedCountChoice(6, 2) }, true, 1, 2),
+                    new StageIntervalConfig("終盤(極限)", 2f, new[] { new WeightedCountChoice(44, 0), new WeightedCountChoice(40, 1), new WeightedCountChoice(16, 2) }, true, 1, 2),
+                }),
+            };
+        }
+
+        private static WaveConfig BuildWave(int singleCount, int doubleCount, int tripleCount, int waveMinQ, int waveMaxQ, StageIntervalConfig[] intervals)
+        {
+            WaveConfig wave = new WaveConfig(singleCount, doubleCount, intervals, DrawStopRule.StopWhenNoFit, 1.0f, 0f, tripleCount);
+            wave.SetWaveQuantityConstraint(true, waveMinQ, waveMaxQ);
+            return wave;
         }
 
         private void Reset()
