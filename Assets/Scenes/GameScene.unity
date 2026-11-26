@@ -3822,8 +3822,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Taurus.Runtime.Game.GameController
   _stageLoader: {fileID: 1437390484}
   _stageDefinition: {fileID: 11400000, guid: 18f7fe472748a2d4ea7ea2fdcfc0b691, type: 2}
-  _singlePendulumPrefab: {fileID: 3351356577621992034, guid: bdef38970f8a2cf42848da954ff664a2, type: 3}
-  _doublePendulumPrefab: {fileID: 6851440609739374631, guid: 8f07c863adab5704c8c10768f016215a, type: 3}
+  _singlePendulumPrefab: {fileID: 1565821431886764073, guid: e6c724df966cafc458612bee0fc42f58, type: 3}
+  _doublePendulumPrefab: {fileID: 641621880846825849, guid: 6aa5119dfe00f79428485def75c271d8, type: 3}
   _useFixedSeed: 0
   _fixedSeed: 123456789
 --- !u!114 &1437390484
