@@ -94,6 +94,28 @@ namespace Taurus.Runtime.Stage
 
             double blendedScore = singleBobScore * Math.Max(1, config.TotalBobCount) * structureMultiplier;
 
+            // Wave全体（親区間）の合計量分布を畳み込み、入れ子制約 [W_min, W_max] の達成確率・到達可能性を算出
+            double[] waveTotalProbs = ConvolveWaveDistributions(results);
+            bool useWaveConstraint = config.UseWaveQuantityConstraint;
+            int waveMinQ = config.WaveMinQuantity;
+            int waveMaxQ = config.WaveMaxQuantity;
+            double waveConstraintProb = 1.0;
+            bool waveConstraintFeasible = true;
+
+            if (useWaveConstraint)
+            {
+                waveConstraintProb = 0.0;
+                for (int q = waveMinQ; q <= waveMaxQ && q < waveTotalProbs.Length; q++)
+                {
+                    waveConstraintProb += waveTotalProbs[q];
+                }
+
+                bool[,] waveCanReach = BuildWaveBackwardReachability(results, waveMinQ, waveMaxQ);
+                waveConstraintFeasible = allFeasible && waveCanReach.GetLength(0) > 0 && waveCanReach.GetLength(1) > 0 && waveCanReach[0, 0];
+            }
+
+            bool combinedFeasible = allFeasible && waveConstraintFeasible;
+
             return new WaveDifficultyReport(
                 startTime,
                 endTime,
@@ -104,9 +126,15 @@ namespace Taurus.Runtime.Stage
                 peakDensity,
                 structureMultiplier,
                 blendedScore,
-                allFeasible,
+                combinedFeasible,
                 results,
-                curvePoints);
+                curvePoints,
+                useWaveConstraint,
+                waveMinQ,
+                waveMaxQ,
+                waveConstraintFeasible,
+                waveConstraintProb,
+                waveTotalProbs);
         }
 
         /// <summary> 1つの分割区間に対して前向きDP（厳密評価）と後ろ向きDP（到達可能性）を実行する。 </summary>
@@ -365,6 +393,223 @@ namespace Taurus.Runtime.Stage
             }
 
             return canReach;
+        }
+
+        /// <summary>
+        /// Wave全体（親区間）の制約 [waveMinQ, waveMaxQ] と各分割区間の制約を同時に満たすための
+        /// 区間横断後ろ向きDPテーブル waveCanReach[intervalIndex, accumulatedWaveQ] を構築する。
+        /// </summary>
+        public static bool[,] BuildWaveBackwardReachability(
+            IReadOnlyList<IntervalDpResult> intervals,
+            int waveMinQ,
+            int waveMaxQ)
+        {
+            int count = intervals != null ? intervals.Count : 0;
+            int clampedMin = Math.Max(0, waveMinQ);
+            int clampedMax = Math.Max(clampedMin, Math.Min(MAX_TRACKED_QUANTITY, waveMaxQ));
+            bool[,] waveCanReach = new bool[count + 1, clampedMax + 1];
+
+            for (int q = clampedMin; q <= clampedMax; q++)
+            {
+                waveCanReach[count, q] = true;
+            }
+
+            for (int k = count - 1; k >= 0; k--)
+            {
+                IntervalDpResult iv = intervals[k];
+                if (iv == null || !iv.HasValidPath)
+                {
+                    continue;
+                }
+
+                IReadOnlyList<double> probs = iv.TerminalQuantityProbabilities;
+                List<int> achievableQ = new List<int>();
+                for (int q = 0; q < probs.Count; q++)
+                {
+                    if (probs[q] <= 0.0)
+                    {
+                        continue;
+                    }
+
+                    if (iv.UseQuantityConstraint && (q < iv.MinQuantity || q > iv.MaxQuantity))
+                    {
+                        continue;
+                    }
+
+                    achievableQ.Add(q);
+                }
+
+                for (int accQ = 0; accQ <= clampedMax; accQ++)
+                {
+                    bool reachable = false;
+                    for (int i = 0; i < achievableQ.Count; i++)
+                    {
+                        int nextAcc = accQ + achievableQ[i];
+                        if (nextAcc <= clampedMax && waveCanReach[k + 1, nextAcc])
+                        {
+                            reachable = true;
+                            break;
+                        }
+                    }
+
+                    waveCanReach[k, accQ] = reachable;
+                }
+            }
+
+            return waveCanReach;
+        }
+
+        /// <summary>
+        /// 任意の有効ゴール集合 validGoalQ[q] に対する1区間内の後ろ向きDP到達可能性テーブル can_reach[t, q] を構築する。
+        /// 入れ子制約（各区間制約 ∩ Wave全体制約）のランタイム抽選重み補正で使用する。
+        /// </summary>
+        public static bool[,] BuildIntervalReachabilityForGoals(
+            StageIntervalConfig interval,
+            DrawStopRule stopRule,
+            float timeStepSeconds,
+            bool[] validGoalQ,
+            out int timeSteps,
+            out int maxTrackedQ)
+        {
+            float duration = interval != null ? interval.DurationSeconds : 1f;
+            float stepSec = Mathf.Clamp(timeStepSeconds > 0f ? timeStepSeconds : 1.0f, 0.1f, 2.0f);
+            timeSteps = Mathf.Clamp(Mathf.RoundToInt(duration / stepSec), 1, MAX_TIME_STEPS);
+
+            List<QuantizedChoice> choices = QuantizeChoices(interval != null ? interval.Choices : null, stepSec, out _);
+            maxTrackedQ = validGoalQ != null && validGoalQ.Length > 0 ? validGoalQ.Length - 1 : 0;
+
+            bool[,] canReach = new bool[timeSteps + 1, maxTrackedQ + 1];
+            if (choices.Count == 0)
+            {
+                canReach[0, 0] = validGoalQ != null && validGoalQ.Length > 0 && validGoalQ[0];
+                return canReach;
+            }
+
+            for (int t = timeSteps; t >= 0; t--)
+            {
+                bool hasFittingChoice = false;
+                bool hasOverflowChoice = false;
+                for (int i = 0; i < choices.Count; i++)
+                {
+                    if (t + choices[i].TimeSteps <= timeSteps)
+                    {
+                        hasFittingChoice = true;
+                    }
+                    else
+                    {
+                        hasOverflowChoice = true;
+                    }
+                }
+
+                for (int q = 0; q <= maxTrackedQ; q++)
+                {
+                    bool isGoal = validGoalQ != null && q < validGoalQ.Length && validGoalQ[q];
+
+                    if (!hasFittingChoice)
+                    {
+                        canReach[t, q] = isGoal;
+                        continue;
+                    }
+
+                    if (stopRule == DrawStopRule.StopOnFirstOverflow && hasOverflowChoice && isGoal)
+                    {
+                        canReach[t, q] = true;
+                        continue;
+                    }
+
+                    bool reachable = false;
+                    for (int i = 0; i < choices.Count; i++)
+                    {
+                        QuantizedChoice c = choices[i];
+                        int nextT = t + c.TimeSteps;
+                        int nextQ = q + c.Quantity;
+                        if (nextT <= timeSteps && nextQ <= maxTrackedQ && canReach[nextT, nextQ])
+                        {
+                            reachable = true;
+                            break;
+                        }
+                    }
+
+                    canReach[t, q] = reachable;
+                }
+            }
+
+            return canReach;
+        }
+
+        private static double[] ConvolveWaveDistributions(IntervalDpResult[] intervals)
+        {
+            if (intervals == null || intervals.Length == 0)
+            {
+                return new[] { 1.0 };
+            }
+
+            double[] acc = new[] { 1.0 };
+            for (int k = 0; k < intervals.Length; k++)
+            {
+                IntervalDpResult iv = intervals[k];
+                IReadOnlyList<double> raw = iv != null ? iv.TerminalQuantityProbabilities : null;
+                if (raw == null || raw.Count == 0)
+                {
+                    continue;
+                }
+
+                // 区間制約が有効かつ達成可能なら、制約内条件付き分布を畳み込む
+                double[] dist = new double[raw.Count];
+                double sum = 0.0;
+                for (int q = 0; q < raw.Count; q++)
+                {
+                    if (iv.UseQuantityConstraint && iv.HasValidPath && (q < iv.MinQuantity || q > iv.MaxQuantity))
+                    {
+                        continue;
+                    }
+
+                    dist[q] = raw[q];
+                    sum += raw[q];
+                }
+
+                if (sum <= 1e-12)
+                {
+                    for (int q = 0; q < raw.Count; q++)
+                    {
+                        dist[q] = raw[q];
+                        sum += raw[q];
+                    }
+                }
+
+                if (sum > 0.0)
+                {
+                    for (int q = 0; q < dist.Length; q++)
+                    {
+                        dist[q] /= sum;
+                    }
+                }
+
+                int nextLen = Math.Min(MAX_TRACKED_QUANTITY + 1, acc.Length + dist.Length - 1);
+                double[] next = new double[nextLen];
+                for (int i = 0; i < acc.Length; i++)
+                {
+                    if (acc[i] <= 0.0)
+                    {
+                        continue;
+                    }
+
+                    for (int j = 0; j < dist.Length; j++)
+                    {
+                        if (dist[j] <= 0.0)
+                        {
+                            continue;
+                        }
+
+                        int idx = Math.Min(nextLen - 1, i + j);
+                        next[idx] += acc[i] * dist[j];
+                    }
+                }
+
+                acc = next;
+            }
+
+            return acc;
         }
 
         private static Vector2[] BuildPiecewiseLinearCurve(IntervalDpResult[] intervals, float startTime, float endTime)
