@@ -27,12 +27,20 @@ namespace Taurus.Runtime.Pendulum
         // Wave開始時の初期角度のsinθ上限：sin(π/√3) ≈ 0.971（水平付近の極端な初期姿勢を避ける）
         private static readonly double INITIAL_SIN_LIMIT = Math.Sin(Math.PI / Math.Sqrt(3.0));
 
+        // 他の玉（親玉・他振り子）が真上通過する予定の時刻スロットでは、同時発光シンクロを抑えるため回転候補の重みを減衰させる
+        private const double OVERLAP_TOP_CROSSING_WEIGHT_FACTOR = 0.12;
+
         /// <summary>
         /// WaveConfig の分割区間・量制約 [Q_min, Q_max]・終了ルールに従い、
         /// 後ろ向きDP（w'_i = w_i * can_reach[t + t_i, q + q_i]）で制約を守りつつ決定論的スケジュールを生成する。
-        /// avoidInitialAngles を渡すと、既存の玉と初期位置・初動方向が被らないよう分散して生成する。
+        /// avoidInitialAngles を渡すと初期位置・初動方向を分散し、
+        /// avoidActiveSlots を渡すと他玉と同じ時刻スロットで同時発光する頻度を抑制する。
         /// </summary>
-        public static MotionSchedule Generate(uint seed, WaveConfig waveConfig, IReadOnlyList<double> avoidInitialAngles = null)
+        public static MotionSchedule Generate(
+            uint seed,
+            WaveConfig waveConfig,
+            IReadOnlyList<double> avoidInitialAngles = null,
+            IReadOnlyList<int> avoidActiveSlots = null)
         {
             if (waveConfig == null)
             {
@@ -85,6 +93,7 @@ namespace Taurus.Runtime.Pendulum
                     useWaveConstraint,
                     waveCanReach,
                     avoidInitialAngles,
+                    avoidActiveSlots,
                     out MotionSchedule schedule))
                 {
                     return schedule;
@@ -126,6 +135,7 @@ namespace Taurus.Runtime.Pendulum
             bool useWaveConstraint,
             bool[,] waveCanReach,
             IReadOnlyList<double> avoidInitialAngles,
+            IReadOnlyList<int> avoidActiveSlots,
             out MotionSchedule schedule)
         {
             uint state = seed;
@@ -138,6 +148,7 @@ namespace Taurus.Runtime.Pendulum
             int totalCount = 0;
             float stepSec = Mathf.Clamp(timeStepSeconds > 0f ? timeStepSeconds : 1.0f, 0.1f, 2.0f);
             int waveMaxTrackedQ = waveCanReach != null ? waveCanReach.GetLength(1) - 1 : 0;
+            int globalTimeStep = 0;
 
             for (int k = 0; k < intervals.Count; k++)
             {
@@ -199,6 +210,10 @@ namespace Taurus.Runtime.Pendulum
 
                 while (currentT < maxT)
                 {
+                    int overlapCount = (avoidActiveSlots != null && globalTimeStep >= 0 && globalTimeStep < avoidActiveSlots.Count)
+                        ? avoidActiveSlots[globalTimeStep]
+                        : 0;
+
                     if (!TryPickChoiceWithBackwardDp(
                         ref state,
                         choices,
@@ -212,6 +227,7 @@ namespace Taurus.Runtime.Pendulum
                         stepSec,
                         stopRule,
                         enforceConstraint,
+                        overlapCount,
                         out WeightedCountChoice choice,
                         out bool shouldStop))
                     {
@@ -257,6 +273,7 @@ namespace Taurus.Runtime.Pendulum
                     elapsedCursor += segDuration;
                     totalCount += choice.TopCount;
                     currentT += choiceSteps;
+                    globalTimeStep += choiceSteps;
                     currentQ += Math.Max(0, choice.TopCount);
                     rotation = endAngle;
                     direction = -direction;
@@ -284,6 +301,7 @@ namespace Taurus.Runtime.Pendulum
             float stepSec,
             DrawStopRule stopRule,
             bool enforceConstraint,
+            int overlapCount,
             out WeightedCountChoice picked,
             out bool shouldStop)
         {
@@ -343,6 +361,12 @@ namespace Taurus.Runtime.Pendulum
                             && canReachTable[nextT, nextQ];
                         adjustedWeight = reachable ? c.Weight : 0.0;
                     }
+                }
+
+                // 同時発光シンクロ抑制：既に他玉が真上通過する予定のスロットでは、回転候補（TopCount > 0）の重みを減衰させる
+                if (adjustedWeight > 0.0 && !isOverflow && overlapCount > 0 && c.TopCount > 0)
+                {
+                    adjustedWeight *= Math.Pow(OVERLAP_TOP_CROSSING_WEIGHT_FACTOR, overlapCount);
                 }
 
                 weights[i] = adjustedWeight;

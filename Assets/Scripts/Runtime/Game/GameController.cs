@@ -399,8 +399,10 @@ namespace Taurus.Runtime.Game
             float now = Time.unscaledTime;
 
             int expectedTotal = 0;
-            // 複数振り子・多段玉の間で初期位置と初動方向が被ってシンクロしないよう既出初期角度を記録する
+            // 複数振り子・多段玉の間で初期位置と真上通過タイミング（発光）がシンクロしないよう既出情報を記録する
             List<double> usedInitialAngles = new List<double>(6);
+            int slotCapacity = Mathf.Max(8, Mathf.CeilToInt((config.EndTimeSeconds - config.StartTimeSeconds) / config.TimeQuantizationStep) + 2);
+            int[] occupiedActiveSlots = new int[slotCapacity];
 
             for (int i = 0; i < totalCount; i++)
             {
@@ -431,35 +433,26 @@ namespace Taurus.Runtime.Game
                     }
                 }
 
-                // 玉ごとに十分独立したシードを導出し、既出初期角度を避けて別々の動きをするように生成する
+                // 玉ごとに十分独立したシードを導出し、既出初期角度・既出通過スロットを避けて非同期に生成する
                 int ix = _currentWave * 17 + i * 3 + 1;
                 uint parentSeed = unchecked(_runSeed ^ (uint)(ix * 2654435761u));
-                MotionSchedule parentSchedule = MotionScheduleGenerator.Generate(parentSeed, config, usedInitialAngles);
-                if (parentSchedule.Segments.Count > 0)
-                {
-                    usedInitialAngles.Add(parentSchedule.Segments[0].StartAngle);
-                }
+                MotionSchedule parentSchedule = MotionScheduleGenerator.Generate(parentSeed, config, usedInitialAngles, occupiedActiveSlots);
+                RecordScheduleUsage(parentSchedule, config.TimeQuantizationStep, usedInitialAngles, occupiedActiveSlots);
 
                 MotionSchedule childSchedule = null;
                 if (isDouble || isTriple)
                 {
                     uint childSeed = unchecked(_runSeed ^ (uint)((ix + 1) * 2246822519u));
-                    childSchedule = MotionScheduleGenerator.Generate(childSeed, config, usedInitialAngles);
-                    if (childSchedule.Segments.Count > 0)
-                    {
-                        usedInitialAngles.Add(childSchedule.Segments[0].StartAngle);
-                    }
+                    childSchedule = MotionScheduleGenerator.Generate(childSeed, config, usedInitialAngles, occupiedActiveSlots);
+                    RecordScheduleUsage(childSchedule, config.TimeQuantizationStep, usedInitialAngles, occupiedActiveSlots);
                 }
 
                 MotionSchedule grandchildSchedule = null;
                 if (isTriple)
                 {
                     uint grandchildSeed = unchecked(_runSeed ^ (uint)((ix + 2) * 3266489917u));
-                    grandchildSchedule = MotionScheduleGenerator.Generate(grandchildSeed, config, usedInitialAngles);
-                    if (grandchildSchedule.Segments.Count > 0)
-                    {
-                        usedInitialAngles.Add(grandchildSchedule.Segments[0].StartAngle);
-                    }
+                    grandchildSchedule = MotionScheduleGenerator.Generate(grandchildSeed, config, usedInitialAngles, occupiedActiveSlots);
+                    RecordScheduleUsage(grandchildSchedule, config.TimeQuantizationStep, usedInitialAngles, occupiedActiveSlots);
                 }
 
                 instance.OnTopCrossed += HandlePendulumTopCrossed;
@@ -470,6 +463,35 @@ namespace Taurus.Runtime.Game
             }
 
             _expectedCount = expectedTotal;
+        }
+
+        private static void RecordScheduleUsage(
+            MotionSchedule schedule,
+            float stepSeconds,
+            List<double> usedInitialAngles,
+            int[] occupiedActiveSlots)
+        {
+            if (schedule == null || schedule.Segments == null || schedule.Segments.Count == 0)
+            {
+                return;
+            }
+
+            usedInitialAngles.Add(schedule.Segments[0].StartAngle);
+            float safeStep = Mathf.Clamp(stepSeconds > 0f ? stepSeconds : 1f, 0.1f, 2f);
+            for (int s = 0; s < schedule.Segments.Count; s++)
+            {
+                MotionSegment seg = schedule.Segments[s];
+                if (seg.ExpectedTopCount <= 0)
+                {
+                    continue;
+                }
+
+                int slot = Mathf.RoundToInt((float)(seg.StartTime / safeStep));
+                if (slot >= 0 && slot < occupiedActiveSlots.Length)
+                {
+                    occupiedActiveSlots[slot]++;
+                }
+            }
         }
 
         private void AddPlayerCount(int delta)

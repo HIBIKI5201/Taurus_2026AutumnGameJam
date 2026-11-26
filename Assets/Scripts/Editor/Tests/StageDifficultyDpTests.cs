@@ -389,5 +389,47 @@ namespace Taurus.Editor.Tests
                 Assert.GreaterOrEqual(diff, 0.5, $"trial={i}, diff={diff}");
             }
         }
+
+        [Test]
+        public void AntiSyncActiveSlots_SignificantlyReducesSimultaneousTopCrossings()
+        {
+            // 二重振り子（Wave 7）で、親玉と子玉の同時発光スロット数が無対策時より大幅に減少することを100試行で検証
+            WaveConfig wave7 = StageDefinition.CreateOptimal15Waves()[6];
+            int naiveOverlaps = 0;
+            int antiSyncOverlaps = 0;
+
+            for (uint i = 0; i < 100u; i++)
+            {
+                uint pSeed = unchecked(12000u + i * 2654435761u);
+                uint cSeed = unchecked(12000u + i * 2246822519u + 31u);
+
+                MotionSchedule parent = MotionScheduleGenerator.Generate(pSeed, wave7);
+                MotionSchedule childNaive = MotionScheduleGenerator.Generate(cSeed, wave7);
+
+                int[] parentSlots = new int[8];
+                for (int s = 0; s < parent.Segments.Count && s < 8; s++)
+                {
+                    if (parent.Segments[s].ExpectedTopCount > 0) parentSlots[s] = 1;
+                }
+
+                MotionSchedule childAntiSync = MotionScheduleGenerator.Generate(cSeed, wave7, new[] { parent.Segments[0].StartAngle }, parentSlots);
+
+                // 制約が引き続き厳密に守られていること
+                Assert.GreaterOrEqual(childAntiSync.TotalExpectedTopCount, wave7.WaveMinQuantity);
+                Assert.LessOrEqual(childAntiSync.TotalExpectedTopCount, wave7.WaveMaxQuantity);
+
+                for (int s = 0; s < 8; s++)
+                {
+                    if (parent.Segments[s].ExpectedTopCount > 0)
+                    {
+                        if (childNaive.Segments[s].ExpectedTopCount > 0) naiveOverlaps++;
+                        if (childAntiSync.Segments[s].ExpectedTopCount > 0) antiSyncOverlaps++;
+                    }
+                }
+            }
+
+            // ソフトペナルティにより同時発光回数が無対策時の半分以下に減少することを検証
+            Assert.Less(antiSyncOverlaps * 2, naiveOverlaps, $"naive={naiveOverlaps}, antiSync={antiSyncOverlaps}");
+        }
     }
 }
