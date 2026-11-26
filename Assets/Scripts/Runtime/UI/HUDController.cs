@@ -176,6 +176,7 @@ namespace Taurus.Runtime.UI
             }
 
             HandlePhaseChanged(_gameController.CurrentPhase);
+            HandleTitlePressChanged(0, GameController.TITLE_REQUIRED_PRESSES);
             HandleWaveStarted(_gameController.CurrentWave);
             HandleTimerUpdated(_gameController.WaveRemainingSeconds);
             HandlePlayerCountChanged(_gameController.PlayerCount, 0);
@@ -194,14 +195,28 @@ namespace Taurus.Runtime.UI
 
         private void HandleTitlePressChanged(int current, int required)
         {
+            bool showProgress = required > 1;
+
             if (_startCountText != null)
             {
-                _startCountText.text = $"{current} / {required}";
+                _startCountText.gameObject.SetActive(showProgress);
+                if (showProgress)
+                {
+                    _startCountText.text = $"{current} / {required}";
+                }
             }
 
             if (_startMeterFill != null)
             {
-                _startMeterFill.fillAmount = required > 0 ? Mathf.Clamp01((float)current / required) : 0f;
+                GameObject meterContainer = _startMeterFill.transform.parent != null
+                    ? _startMeterFill.transform.parent.gameObject
+                    : _startMeterFill.gameObject;
+                meterContainer.SetActive(showProgress);
+
+                if (showProgress)
+                {
+                    _startMeterFill.fillAmount = Mathf.Clamp01((float)current / required);
+                }
             }
         }
 

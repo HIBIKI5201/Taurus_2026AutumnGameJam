@@ -129,3 +129,5 @@ __pycache__/
 
 # Hot Reload（有償アセット。各自でインストールする）
 Packages/com.singularitygroup.hotreload/
+
+.env

@@ -17,8 +17,6 @@
 | `Develop/Cheat` | `Taurus.Develop.Cheat` |
 | `Editor/LevelTool` | `Taurus.Editor.LevelTool` |
 
-Project Settings（Editor → Root namespace）には `Taurus.Runtime` を設定してあるので、新しく作ったスクリプトにはこれが自動で入る。`Develop`・`Editor` に作ったときは手で書き換える。
-
 ## 書き方
 
 - MonoBehaviour で素直に書いてよい。レイヤー分け・インターフェース・抽象化は、必要になるまで作らない。

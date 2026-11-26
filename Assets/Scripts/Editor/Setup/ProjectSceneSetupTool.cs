@@ -540,17 +540,20 @@ namespace Taurus.Editor.Setup
             GameObject titlePanel = CreatePanel("TitlePanel", canvasObj.transform, PANEL_OVERLAY_COLOR);
             CreateText("Eyebrow", titlePanel.transform, uiFont, "PENDULUM CHALLENGE", 24, LIME_COLOR, new Vector2(0f, 260f), new Vector2(800f, 50f));
             CreateText("TitleLogo", titlePanel.transform, uiFont, "10カウント", 96, TEXT_COLOR, new Vector2(0f, 165f), new Vector2(900f, 120f), FontStyle.Bold);
-            CreateText("SubText", titlePanel.transform, uiFont, "揺れる振り子の真上通過を数えろ。\nSPACE を10回押してルールを見る", 28, MUTED_COLOR, new Vector2(0f, 45f), new Vector2(900f, 90f));
+            CreateText("SubText", titlePanel.transform, uiFont, "揺れる振り子の真上通過を数えろ。\nSPACE を押してルールを見る", 28, MUTED_COLOR, new Vector2(0f, 45f), new Vector2(900f, 90f));
 
+            bool showTitleMeter = GameController.TITLE_REQUIRED_PRESSES > 1;
             GameObject meterBg = CreateImage("StartMeterBg", titlePanel.transform, squareSprite, DARK_BTN_COLOR, new Vector2(0f, -45f), new Vector2(520f, 22f));
             GameObject meterFillObj = CreateImage("StartMeterFill", meterBg.transform, squareSprite, LIME_COLOR, Vector2.zero, new Vector2(520f, 22f));
             Image meterFill = meterFillObj.GetComponent<Image>();
             meterFill.type = Image.Type.Filled;
             meterFill.fillMethod = Image.FillMethod.Horizontal;
             meterFill.fillAmount = 0f;
+            meterBg.SetActive(showTitleMeter);
 
-            Text startCountText = CreateText("StartCountText", titlePanel.transform, uiFont, "0 / 10", 34, LIME_COLOR, new Vector2(0f, -100f), new Vector2(400f, 50f), FontStyle.Bold);
-            Button titleStartBtn = CreateButton("TitleStartButton", titlePanel.transform, uiFont, squareSprite, "スペースキーを10回押す", LIME_COLOR, BG_COLOR, new Vector2(0f, -195f), new Vector2(440f, 76f));
+            Text startCountText = CreateText("StartCountText", titlePanel.transform, uiFont, $"0 / {GameController.TITLE_REQUIRED_PRESSES}", 34, LIME_COLOR, new Vector2(0f, -100f), new Vector2(400f, 50f), FontStyle.Bold);
+            startCountText.gameObject.SetActive(showTitleMeter);
+            Button titleStartBtn = CreateButton("TitleStartButton", titlePanel.transform, uiFont, squareSprite, "スタート (SPACE)", LIME_COLOR, BG_COLOR, new Vector2(0f, -195f), new Vector2(440f, 76f));
 
             // Rules Panel
             GameObject rulesPanel = CreatePanel("RulesPanel", canvasObj.transform, PANEL_OVERLAY_COLOR);
