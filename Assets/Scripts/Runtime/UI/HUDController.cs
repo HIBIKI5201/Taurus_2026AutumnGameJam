@@ -18,6 +18,9 @@ namespace Taurus.Runtime.UI
     /// </summary>
     public class HUDController : MonoBehaviour
     {
+        // カウント操作フィードバック（「カウントを記録した」等）の自動非表示までの秒数
+        private const float FEEDBACK_DISPLAY_DURATION = 2f;
+
         [SerializeField] private GameController _gameController;
 
         [Header("Panels（画面状態ごとに SetActive を切替）")]
@@ -51,10 +54,25 @@ namespace Taurus.Runtime.UI
         [SerializeField] private Button _homeButton;
 
         private GameController _subscribedController;
+        private float _feedbackHideTimer;
 
         private void Awake()
         {
             BindButtons();
+        }
+
+        private void Update()
+        {
+            if (_feedbackHideTimer <= 0f)
+            {
+                return;
+            }
+
+            _feedbackHideTimer -= Time.unscaledDeltaTime;
+            if (_feedbackHideTimer <= 0f && _feedbackText != null)
+            {
+                _feedbackText.text = string.Empty;
+            }
         }
 
         private void OnEnable()
@@ -279,6 +297,8 @@ namespace Taurus.Runtime.UI
             {
                 _feedbackText.text = string.Empty;
             }
+
+            _feedbackHideTimer = 0f;
         }
 
         private void HandleTimerUpdated(float remainingSeconds)
@@ -301,6 +321,7 @@ namespace Taurus.Runtime.UI
             if (_feedbackText != null && delta != 0)
             {
                 _feedbackText.text = delta > 0 ? "カウントを記録した" : "ひとつ戻した";
+                _feedbackHideTimer = FEEDBACK_DISPLAY_DURATION;
             }
         }
 
@@ -310,6 +331,9 @@ namespace Taurus.Runtime.UI
             {
                 _feedbackText.text = $"正解！（{expectedCount}回） 次のウェーブへ";
             }
+
+            // 成功メッセージは次Waveの開始（HandleWaveStarted）まで表示し続ける
+            _feedbackHideTimer = 0f;
         }
 
         private void HandleGameFinished(int clearedWaves, int expectedCount, int playerCount, IReadOnlyList<int> records)

@@ -17,6 +17,9 @@ namespace Taurus.Runtime.Pendulum
         // 0〜8秒は決定論的軌道、8〜10秒は見た目用の減衰揺動（カウント対象外）
         private const double PLANNED_DURATION = 8.0;
 
+        // Wave開始直後の理不尽回避：最初の1秒間は初期姿勢のまま回転させない
+        private const double START_FREEZE_DURATION = 1.0;
+
         // 減衰運動の数値積分が不安定にならないよう1フレームのΔtとサブステップ幅を制限する
         private const double MAX_FRAME_DT = 0.05;
         private const double MAX_SUBSTEP_DT = 1.0 / 120.0;
@@ -161,11 +164,32 @@ namespace Taurus.Runtime.Pendulum
                 return;
             }
 
-            // 0〜8秒：事前生成スケジュールに沿った決定論的モーション
-            if (elapsedSeconds < PLANNED_DURATION)
+            double scheduleElapsed = elapsedSeconds - START_FREEZE_DURATION;
+
+            // Wave開始から最初の1秒間：初期姿勢のまま固定し、回転も真上通過判定も行わない
+            if (scheduleElapsed < 0.0)
             {
-                _currentSegmentIndex = _parentSchedule.GetSegmentIndex(elapsedSeconds);
-                double nextParent = _parentSchedule.EvaluateAngle(elapsedSeconds);
+                _currentSegmentIndex = 0;
+                double frozenParent = _parentSchedule.EvaluateAngle(0.0);
+                _parentAngle = frozenParent;
+                ApplyArmRotation(_parentArm, _parentAngle);
+
+                if (IsDoublePendulum)
+                {
+                    double frozenChildWorld = _childSchedule.EvaluateAngle(0.0);
+                    _childWorldAngle = frozenChildWorld;
+                    _childLocalAngle = frozenChildWorld - frozenParent;
+                    ApplyArmRotation(_childArm, _childLocalAngle);
+                }
+
+                return;
+            }
+
+            // 固定1秒を終えた後の8秒間：事前生成スケジュールに沿った決定論的モーション
+            if (scheduleElapsed < PLANNED_DURATION)
+            {
+                _currentSegmentIndex = _parentSchedule.GetSegmentIndex(scheduleElapsed);
+                double nextParent = _parentSchedule.EvaluateAngle(scheduleElapsed);
                 _parentAngle = nextParent;
                 ApplyArmRotation(_parentArm, _parentAngle);
                 _parentDetector.Evaluate(nextParent, unscaledTime);
@@ -173,7 +197,7 @@ namespace Taurus.Runtime.Pendulum
                 if (IsDoublePendulum)
                 {
                     // 子玉は支点基準のワールド角で真上通過判定し、子棒の見た目だけローカル角へ変換する
-                    double nextChildWorld = _childSchedule.EvaluateAngle(elapsedSeconds);
+                    double nextChildWorld = _childSchedule.EvaluateAngle(scheduleElapsed);
                     _childWorldAngle = nextChildWorld;
                     _childLocalAngle = nextChildWorld - nextParent;
                     ApplyArmRotation(_childArm, _childLocalAngle);

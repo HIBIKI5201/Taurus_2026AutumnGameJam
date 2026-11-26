@@ -1,3 +1,4 @@
+using Taurus.Runtime.Pendulum;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -13,9 +14,6 @@ namespace Taurus.Runtime.UI
         private const float SPIN_CYCLE = 2.4f;
         private const float FEINT_CYCLE = 2.3f;
         private const float REVERSE_CYCLE = 2.7f;
-
-        private static readonly Color BASE_COLOR = new Color(0.16f, 0.27f, 0.24f, 1f);
-        private static readonly Color FLASH_COLOR = new Color(0.835f, 1.0f, 0.345f, 1f); // #d5ff58
 
         [SerializeField] private RectTransform _spinArm;
         [SerializeField] private Image _spinBob;
@@ -64,7 +62,7 @@ namespace Taurus.Runtime.UI
             if (_spinBob != null)
             {
                 bool isFlash = u >= 0.48f && u <= 0.54f;
-                _spinBob.color = isFlash ? FLASH_COLOR : BASE_COLOR;
+                _spinBob.color = isFlash ? PendulumFlashPalette.ParentFlashColor : PendulumFlashPalette.ParentBaseColor;
                 _spinBob.rectTransform.localScale = Vector3.one * (isFlash ? 1.35f : 1f);
             }
         }
@@ -105,7 +103,7 @@ namespace Taurus.Runtime.UI
             if (_reverseBob != null)
             {
                 bool isFlash = u >= 0.60f && u <= 0.67f;
-                _reverseBob.color = isFlash ? FLASH_COLOR : BASE_COLOR;
+                _reverseBob.color = isFlash ? PendulumFlashPalette.ParentFlashColor : PendulumFlashPalette.ParentBaseColor;
                 _reverseBob.rectTransform.localScale = Vector3.one * (isFlash ? 1.35f : 1f);
             }
         }
