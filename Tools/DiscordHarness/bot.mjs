@@ -11,12 +11,16 @@
  *    を Discord REST API で取得し、文脈付きプロンプトとして Antigravity ConversationService へ投入する。
  * 3. GetConversation で処理完了（RUN_STATE_IDLE）を待機し、
  *    transcript.jsonl から最終応答を抽出して Discord へ返信する（2000文字超は自動分割）。
+ * 4. Antigravity が利用制限（レート制限・クォータ超過）に掛かった場合、または未設定の場合は、
+ *    Claude Code CLI（`claude -p`）へ同じ依頼を引き継いで処理する（Antigravity 優先・Claude 予備）。
+ *    利用制限を検知したら DISCORD_AGY_COOLDOWN_MS の間は Antigravity を飛ばして Claude を直接使う。
  *
  * 【起動方法】
  *   node Tools/DiscordHarness/bot.mjs
  *   ※ .env に DISCORD_BOT_TOKEN=... を設定しておくこと。
  */
 
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -67,6 +71,25 @@ const AGY_LS_ADDRESS = (process.env.ANTIGRAVITY_LS_ADDRESS || "").trim();
 const AGY_CSRF_TOKEN = (process.env.ANTIGRAVITY_CSRF_TOKEN || "").trim();
 const AGY_PROJECT_ID = (process.env.ANTIGRAVITY_PROJECT_ID || "").trim();
 const AGY_BRAIN_DIR = path.join(os.homedir(), ".gemini", "antigravity", "brain");
+// 利用制限を検知した後、Antigravity を飛ばして Claude を直接使う期間（デフォルト 30 分）
+const AGY_COOLDOWN_MS = Number(process.env.DISCORD_AGY_COOLDOWN_MS || 1_800_000);
+// Antigravity の利用制限とみなすエラー文言
+const AGY_RATE_LIMIT_PATTERN =
+  /RESOURCE_EXHAUSTED|rate[\s_-]?limit|quota|too many requests|usage limit|HTTP 429|利用制限|上限に達/i;
+
+// ---------- Claude Code（予備エージェント） ----------
+const CLAUDE_ENABLED = (process.env.DISCORD_CLAUDE_ENABLED ?? "true").toLowerCase() !== "false";
+const CLAUDE_BIN = (process.env.DISCORD_CLAUDE_BIN || (process.platform === "win32" ? "claude.cmd" : "claude")).trim();
+const CLAUDE_MODEL = (process.env.DISCORD_CLAUDE_MODEL || "").trim();
+// Discord 経由の依頼なので全許可（bypassPermissions）にはせず、編集の自動承認＋許可ツールの明示に留める
+const CLAUDE_PERMISSION_MODE = (process.env.DISCORD_CLAUDE_PERMISSION_MODE || "acceptEdits").trim();
+const CLAUDE_ALLOWED_TOOLS = (
+  process.env.DISCORD_CLAUDE_ALLOWED_TOOLS ||
+  "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh:*),Bash(unity:*),Bash(node:*),Bash(rg:*)"
+)
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 // GUILDS(1<<0) | GUILD_MESSAGES(1<<9) | DIRECT_MESSAGES(1<<12) | MESSAGE_CONTENT(1<<15)
@@ -96,7 +119,18 @@ let heartbeatTimer = null;
 let lastSeq = null;
 let reconnectDelayMs = 2000;
 let activeJobs = 0;
+// Antigravity の利用制限を検知した時刻（0 なら未検知）
+let agyRateLimitedAt = 0;
 const processedMessageIds = new Set();
+
+/** Antigravity の利用制限を表すエラー。これを受けたら Claude へ引き継ぐ。 */
+class AgentRateLimitError extends Error {
+  constructor(message, conversationId = null) {
+    super(message);
+    this.name = "AgentRateLimitError";
+    this.conversationId = conversationId;
+  }
+}
 
 // ---------- Discord REST API ヘルパー ----------
 async function discordFetch(endpoint, options = {}) {
@@ -296,6 +330,194 @@ async function buildConversationContext(msg, referencedMessage) {
   };
 }
 
+// ---------- エージェント共通 ----------
+/**
+ * Antigravity・Claude 共通の依頼プロンプトを組み立てる。
+ * handoffNote があれば、前のエージェントから引き継いだ旨を先頭に足す。
+ */
+function buildAgentPrompt(promptText, meta, handoffNote = null) {
+  const promptParts = [
+    `[Discord からの依頼 / 送信者: ${meta.authorName} / 場所: ${meta.channelLabel}]`,
+    "以下のルールを必ず守って依頼に対応してください：",
+    "1. 会話履歴・返信対象メッセージを踏まえて対応する。",
+    "2. コード・シーン・Prefab・設定などのファイル変更を伴うタスクを完了した場合は、必ず「対象ファイルのみをステージ → 作業ブランチ（feature/<作業名>/agent）へコミット＆プッシュ → main へ PR 作成（.github/PULL_REQUEST_TEMPLATE.md 準拠）」まで完了させてから最終回答する。",
+    "3. 最終回答は Discord へそのまま返信されるため、実施内容・確認結果・作成した PR の URL を簡潔な日本語で必ず記載して終える（ツール実行だけで無言終了しないこと）。",
+  ];
+
+  if (handoffNote) {
+    promptParts.push("", `[引き継ぎ] ${handoffNote}`);
+  }
+
+  if (meta.contextText) {
+    promptParts.push("", meta.contextText);
+  }
+
+  promptParts.push("", "[今回のユーザー依頼]", promptText);
+  return promptParts.join("\n");
+}
+
+function isAgyCoolingDown() {
+  return agyRateLimitedAt > 0 && Date.now() - agyRateLimitedAt < AGY_COOLDOWN_MS;
+}
+
+/**
+ * 会話状態のうちエラー系フィールドだけを見て、利用制限の文言があれば返す。
+ * summary などの本文は依頼内容に「quota」等が含まれうるため対象にしない。
+ */
+function findRateLimitInState(state, depth = 0) {
+  if (!state || typeof state !== "object" || depth > 4) return null;
+  for (const [key, value] of Object.entries(state)) {
+    if (/summary|title|prompt|content/i.test(key)) continue;
+    if (typeof value === "string") {
+      if (/error|status|reason|message|code/i.test(key) && AGY_RATE_LIMIT_PATTERN.test(value)) {
+        return `${key}=${value.slice(0, 200)}`;
+      }
+    } else if (value && typeof value === "object") {
+      const found = findRateLimitInState(value, depth + 1);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * Antigravity を先に使い、利用制限（または未設定）なら Claude へ引き継ぐ。
+ * onSwitch は Claude へ切り替える直前に呼ばれる（Discord への途中経過通知用）。
+ */
+async function runAgentWithFallback(promptText, meta, onSwitch) {
+  let handoffNote = null;
+  let switchReason = null;
+
+  if (!isAntigravityAvailable()) {
+    switchReason = "Antigravity が未設定のため";
+  } else if (isAgyCoolingDown()) {
+    const restMin = Math.ceil((AGY_COOLDOWN_MS - (Date.now() - agyRateLimitedAt)) / 60_000);
+    switchReason = `Antigravity が利用制限中のため（あと約 ${restMin} 分は Claude を使用）`;
+  } else {
+    try {
+      const result = await runAntigravityPrompt(promptText, meta);
+      agyRateLimitedAt = 0;
+      return { ...result, agent: "Antigravity" };
+    } catch (err) {
+      if (!(err instanceof AgentRateLimitError)) throw err;
+      agyRateLimitedAt = Date.now();
+      console.warn(`[DiscordHarness] ${err.message} → Claude へ切り替えます`);
+      switchReason = "Antigravity が利用制限に掛かったため";
+      if (err.conversationId) {
+        handoffNote =
+          `この依頼は Antigravity（会話ID: ${err.conversationId}）が途中まで進めた後、利用制限で止まったものです。` +
+          "まず git status・git branch・git log で途中の変更や作業ブランチが残っていないか確認し、残っていれば続きから仕上げてください。";
+      }
+    }
+  }
+
+  if (!CLAUDE_ENABLED) {
+    throw new Error(`${switchReason}処理できません（Claude 予備は DISCORD_CLAUDE_ENABLED=false で無効）。`);
+  }
+
+  if (onSwitch) await onSwitch(switchReason);
+  const result = await runClaudePrompt(promptText, meta, handoffNote);
+  return { ...result, agent: "Claude" };
+}
+
+// ---------- Claude Code CLI 連携 ----------
+function quoteForCmd(arg) {
+  // shell 経由（Windows の .cmd 起動）時のみ使う。空白・括弧・* を含む引数を二重引用符で囲む
+  return /[\s()*&|<>^"]/.test(arg) ? `"${arg.replace(/"/g, '""')}"` : arg;
+}
+
+/**
+ * Claude Code を非対話モード（claude -p）でリポジトリ直下から起動し、最終応答テキストを返す。
+ * プロンプトは標準入力で渡す（コマンドライン長・エスケープの問題を避けるため）。
+ */
+function runClaudePrompt(promptText, meta, handoffNote) {
+  const args = ["-p", "--output-format", "json", "--permission-mode", CLAUDE_PERMISSION_MODE];
+  if (CLAUDE_ALLOWED_TOOLS.length > 0) args.push("--allowedTools", ...CLAUDE_ALLOWED_TOOLS);
+  if (CLAUDE_MODEL) args.push("--model", CLAUDE_MODEL);
+
+  const useShell = process.platform === "win32" && /\.(cmd|bat)$/i.test(CLAUDE_BIN);
+  const child = spawn(useShell ? quoteForCmd(CLAUDE_BIN) : CLAUDE_BIN, useShell ? args.map(quoteForCmd) : args, {
+    cwd: REPO_ROOT,
+    shell: useShell,
+    windowsHide: true,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  console.log(`[DiscordHarness] Claude 起動 (pid=${child.pid}, 履歴=${meta.historyCount}件, 引き継ぎ=${Boolean(handoffNote)})`);
+
+  return new Promise((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killProcessTree(child);
+    }, REPLY_TIMEOUT_MS);
+
+    child.stdout.on("data", (d) => (stdout += d));
+    child.stderr.on("data", (d) => (stderr += d));
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      reject(new Error(`Claude を起動できません（${CLAUDE_BIN}）: ${err.message}`));
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (timedOut) {
+        resolve({ reply: "Claude の処理がタイムアウトしました（作業ブランチに途中の変更が残っている可能性があります）。" });
+        return;
+      }
+
+      const parsed = parseClaudeJson(stdout);
+      if (parsed) {
+        console.log(`[DiscordHarness] Claude 完了 (code=${code}, session=${parsed.session_id || "?"}, error=${Boolean(parsed.is_error)})`);
+        const text = typeof parsed.result === "string" ? parsed.result.trim() : "";
+        if (parsed.is_error) {
+          // 未ログイン等では subtype が "success" のまま is_error=true になるため、subtype は success 以外のときだけ添える
+          const kind = parsed.subtype && parsed.subtype !== "success" ? `（${parsed.subtype}）` : "";
+          resolve({ reply: `Claude の処理でエラーになりました${kind}:\n${text.slice(0, 1500)}` });
+        } else {
+          resolve({ reply: text || "Claude の処理が完了しました（応答本文なし）。" });
+        }
+        return;
+      }
+
+      reject(new Error(`Claude が異常終了しました (code=${code}): ${(stderr || stdout).trim().slice(0, 800)}`));
+    });
+
+    child.stdin.end(buildAgentPrompt(promptText, meta, handoffNote));
+  });
+}
+
+/** --output-format json の出力（最後の JSON オブジェクト）を取り出す。 */
+function parseClaudeJson(stdout) {
+  const text = (stdout || "").trim();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    const start = text.lastIndexOf("\n{");
+    if (start >= 0) {
+      try {
+        return JSON.parse(text.slice(start + 1));
+      } catch {
+        // 解析不能
+      }
+    }
+    return null;
+  }
+}
+
+function killProcessTree(child) {
+  if (!child.pid) return;
+  if (process.platform === "win32") {
+    // shell 経由で起動すると子プロセスが cmd.exe の下にぶら下がるため、ツリーごと止める
+    spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true });
+  } else {
+    child.kill("SIGTERM");
+  }
+}
+
 // ---------- Antigravity ConversationService 連携 ----------
 function isAntigravityAvailable() {
   return Boolean(AGY_LS_ADDRESS && AGY_CSRF_TOKEN);
@@ -332,32 +554,26 @@ async function runAntigravityPrompt(promptText, meta) {
     );
   }
 
-  const promptParts = [
-    `[Discord からの依頼 / 送信者: ${meta.authorName} / 場所: ${meta.channelLabel}]`,
-    "以下のルールを必ず守って依頼に対応してください：",
-    "1. 会話履歴・返信対象メッセージを踏まえて対応する。",
-    "2. コード・シーン・Prefab・設定などのファイル変更を伴うタスクを完了した場合は、必ず「対象ファイルのみをステージ → 作業ブランチ（feature/<作業名>/agent）へコミット＆プッシュ → main へ PR 作成（.github/PULL_REQUEST_TEMPLATE.md 準拠）」まで完了させてから最終回答する。",
-    "3. 最終回答は Discord へそのまま返信されるため、実施内容・確認結果・作成した PR の URL を簡潔な日本語で必ず記載して終える（ツール実行だけで無言終了しないこと）。",
-  ];
-
-  if (meta.contextText) {
-    promptParts.push("", meta.contextText);
-  }
-
-  promptParts.push("", "[今回のユーザー依頼]", promptText);
-
   const createBody = {
     title: `Discord (${meta.channelLabel}): ${promptText.slice(0, 36)}`,
     model: AGY_MODEL,
     tags: ["discord"],
-    prompt: [{ text: promptParts.join("\n") }],
+    prompt: [{ text: buildAgentPrompt(promptText, meta) }],
   };
 
   if (AGY_PROJECT_ID) {
     createBody.projectId = AGY_PROJECT_ID;
   }
 
-  const created = await callConversationService("CreateConversation", createBody);
+  let created;
+  try {
+    created = await callConversationService("CreateConversation", createBody);
+  } catch (err) {
+    if (AGY_RATE_LIMIT_PATTERN.test(String(err?.message || err))) {
+      throw new AgentRateLimitError(`Antigravity 利用制限: ${err.message}`);
+    }
+    throw err;
+  }
   const conversationId = created?.conversation?.id;
   if (!conversationId) {
     throw new Error("CreateConversation のレスポンスに conversation.id がありません。");
@@ -389,6 +605,12 @@ async function runAntigravityPrompt(promptText, meta) {
     lastState = conv?.state;
     const runState = lastState?.runState;
 
+    // 実行途中で利用制限に掛かった場合は、会話状態のエラー情報に現れる
+    const stateError = findRateLimitInState(lastState);
+    if (stateError) {
+      throw new AgentRateLimitError(`Antigravity 利用制限: ${stateError}`, conversationId);
+    }
+
     if (runState === "RUN_STATE_RUNNING") {
       hasObservedRunning = true;
       consecutiveIdleCount = 0;
@@ -404,6 +626,10 @@ async function runAntigravityPrompt(promptText, meta) {
         // transcript.jsonl の最終フラッシュを少し待ってから再取得
         await sleep(800);
         const finalReply = extractLastAssistantReply(conversationId) || reply;
+        // 利用制限で打ち切られると、短いエラー文だけが最終応答になる
+        if (finalReply && finalReply.length < 400 && AGY_RATE_LIMIT_PATTERN.test(finalReply)) {
+          throw new AgentRateLimitError(`Antigravity 利用制限: ${finalReply}`, conversationId);
+        }
         console.log(
           `[DiscordHarness] Antigravity 会話完了: ${conversationId} (replyLen=${finalReply ? finalReply.length : 0})`
         );
@@ -542,7 +768,7 @@ async function handleMessageCreate(msg) {
 
   // 疎通・状態確認用の軽量コマンド
   if (prompt === "!ping") {
-    await sendDiscordMessage(msg.channel_id, "pong! Antigravity ハーネス稼働中です（履歴・返信コンテキスト対応済み）。", msg.id);
+    await sendDiscordMessage(msg.channel_id, "pong! ハーネス稼働中です（Antigravity 優先・Claude 予備／履歴・返信コンテキスト対応済み）。", msg.id);
     return;
   }
 
@@ -550,16 +776,17 @@ async function handleMessageCreate(msg) {
     const statusText = [
       `**Discord Harness Status**`,
       `- Bot: \`${botTag}\``,
-      `- Antigravity API: ${isAntigravityAvailable() ? "接続可能" : "未設定"}`,
+      `- Antigravity API: ${isAntigravityAvailable() ? (isAgyCoolingDown() ? "利用制限中（Claude へ迂回）" : "接続可能") : "未設定"}`,
+      `- Claude 予備: ${CLAUDE_ENABLED ? `有効（\`${CLAUDE_BIN}\` / ${CLAUDE_PERMISSION_MODE}${CLAUDE_MODEL ? ` / ${CLAUDE_MODEL}` : ""}）` : "無効"}`,
       `- 実行中タスク数: ${activeJobs}`,
-      `- モデル: \`${AGY_MODEL}\``,
+      `- Antigravity モデル: \`${AGY_MODEL}\``,
       `- 履歴取得件数: 直近 ${HISTORY_LIMIT} 件（スレッド開始・返信元メッセージ対応）`,
     ].join("\n");
     await sendDiscordMessage(msg.channel_id, statusText, msg.id);
     return;
   }
 
-  // Antigravity へジョブ投入
+  // エージェントへジョブ投入（Antigravity 優先、利用制限時は Claude）
   activeJobs++;
   const authorName = msg.author?.global_name || msg.author?.username || "unknown";
   console.log(`[DiscordHarness] 受信 (${authorName}): ${prompt.slice(0, 80)}`);
@@ -567,19 +794,28 @@ async function handleMessageCreate(msg) {
   const typingTimer = setInterval(() => triggerTyping(msg.channel_id), 8000);
   try {
     await triggerTyping(msg.channel_id);
-    await sendDiscordMessage(msg.channel_id, "受け付けました。会話履歴を確認して Antigravity で処理しています…", msg.id);
+    const firstAgent = isAntigravityAvailable() && !isAgyCoolingDown() ? "Antigravity" : "Claude";
+    await sendDiscordMessage(msg.channel_id, `受け付けました。会話履歴を確認して ${firstAgent} で処理しています…`, msg.id);
 
     const ctx = await buildConversationContext(msg, referencedMessage);
-    const { reply } = await runAntigravityPrompt(prompt, {
-      authorName,
-      channelId: msg.channel_id,
-      channelLabel: ctx.channelLabel,
-      contextText: ctx.contextText,
-      historyCount: ctx.historyCount,
-      hasReference: ctx.hasReference,
-    });
+    const { reply, agent } = await runAgentWithFallback(
+      prompt,
+      {
+        authorName,
+        channelId: msg.channel_id,
+        channelLabel: ctx.channelLabel,
+        contextText: ctx.contextText,
+        historyCount: ctx.historyCount,
+        hasReference: ctx.hasReference,
+      },
+      async (reason) => {
+        // 最初から Claude で受け付けた場合は、二重に通知しない
+        if (firstAgent === "Claude") return;
+        await sendDiscordMessage(msg.channel_id, `${reason}、Claude に切り替えて続けます…`, msg.id).catch(() => {});
+      }
+    );
 
-    await sendDiscordMessage(msg.channel_id, reply, msg.id);
+    await sendDiscordMessage(msg.channel_id, agent === "Claude" ? `${reply}\n\n（処理: Claude）` : reply, msg.id);
   } catch (err) {
     console.error("[DiscordHarness] 処理エラー:", err);
     await sendDiscordMessage(
