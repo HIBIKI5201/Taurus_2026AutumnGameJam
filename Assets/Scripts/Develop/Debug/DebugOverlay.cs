@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
 using Taurus.Runtime.Game;
+using Taurus.Runtime.Input;
 using Taurus.Runtime.Pendulum;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -23,12 +24,37 @@ namespace Taurus.Develop.Debug
         [SerializeField] private Text _debugText;
 
         private readonly StringBuilder _builder = new StringBuilder(512);
+        private GameInputActions _inputActions;
         private bool _isVisible;
 
         private void Awake()
         {
             // 起動時は非表示にしておき、Fキーで開閉する
             SetVisible(false);
+        }
+
+        private void OnEnable()
+        {
+            _inputActions ??= new GameInputActions();
+            _inputActions.Debug.ToggleOverlay.performed += HandleToggleOverlayPerformed;
+            _inputActions.Debug.Enable();
+        }
+
+        private void OnDisable()
+        {
+            if (_inputActions == null)
+            {
+                return;
+            }
+
+            _inputActions.Debug.ToggleOverlay.performed -= HandleToggleOverlayPerformed;
+            _inputActions.Debug.Disable();
+        }
+
+        private void OnDestroy()
+        {
+            _inputActions?.Dispose();
+            _inputActions = null;
         }
 
         /// <summary> エディタ構築ツール（ProjectSceneSetupTool）から参照を設定する。 </summary>
@@ -41,16 +67,15 @@ namespace Taurus.Develop.Debug
 
         private void Update()
         {
-            Keyboard keyboard = Keyboard.current;
-            if (keyboard != null && keyboard.fKey.wasPressedThisFrame)
-            {
-                SetVisible(!_isVisible);
-            }
-
             if (_isVisible)
             {
                 RefreshText();
             }
+        }
+
+        private void HandleToggleOverlayPerformed(InputAction.CallbackContext context)
+        {
+            SetVisible(!_isVisible);
         }
 
         private void SetVisible(bool visible)

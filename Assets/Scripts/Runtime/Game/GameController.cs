@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using Taurus.Runtime.Input;
 using Taurus.Runtime.Pendulum;
 using Taurus.Runtime.Stage;
 using UnityEngine;
@@ -15,14 +16,14 @@ namespace Taurus.Runtime.Game
     ///
     /// 【引き継ぎ・設計ポイント】
     /// - 時間計測は Time.timeScale の影響を受けない unscaledDeltaTime / unscaledTime を使用する。
-    /// - 入力は New Input System（Keyboard.current）と UI ボタンの両方から同じ Handle〇〇Input メソッドへ集約している。
+    /// - 入力は ActionMap から C# Generate した GameInputActions と UI ボタンの両方から同じ Handle〇〇Input メソッドへ集約している。
     /// - 正解カウントはフレーム落ち等の誤差を避けるため、実測イベント数ではなくスケジュール予定数の合計（_expectedCount）を使用する。
     /// - UI（HUDController）やサウンド（GameAudioHooks）とは C# event 経由で疎結合に連携している。
     /// </summary>
     public class GameController : MonoBehaviour
     {
         /// <summary> タイトル画面からルール画面へ進むのに必要な Space 押下回数。 </summary>
-        public const int TITLE_REQUIRED_PRESSES = 10;
+        public const int TITLE_REQUIRED_PRESSES = 1;
 
         /// <summary> 1 Wave あたりの総時間（秒）。0〜8秒が計画軌道、8〜10秒が減衰揺動。 </summary>
         public const float WAVE_DURATION_SECONDS = 10.0f;
@@ -64,6 +65,9 @@ namespace Taurus.Runtime.Game
 
         // Success 待機中の UniTask をリセットや破棄時に安全にキャンセルするためのトークンソース
         private CancellationTokenSource _phaseCts;
+
+        // ActionMap（GameInputActions.inputactions）から生成された入力ラッパー
+        private GameInputActions _inputActions;
 
         /// <summary> 画面状態が切り替わったときに発行される。 </summary>
         public event Action<GamePhase> OnPhaseChanged;
@@ -129,6 +133,28 @@ namespace Taurus.Runtime.Game
             _doublePendulumPrefab = doublePrefab;
         }
 
+        private void OnEnable()
+        {
+            _inputActions ??= new GameInputActions();
+            _inputActions.Game.CountUp.performed += HandleCountUpPerformed;
+            _inputActions.Game.CountDown.performed += HandleCountDownPerformed;
+            _inputActions.Game.Cancel.performed += HandleCancelPerformed;
+            _inputActions.Game.Enable();
+        }
+
+        private void OnDisable()
+        {
+            if (_inputActions == null)
+            {
+                return;
+            }
+
+            _inputActions.Game.CountUp.performed -= HandleCountUpPerformed;
+            _inputActions.Game.CountDown.performed -= HandleCountDownPerformed;
+            _inputActions.Game.Cancel.performed -= HandleCancelPerformed;
+            _inputActions.Game.Disable();
+        }
+
         private void Start()
         {
             InitializeAsync().Forget();
@@ -138,6 +164,8 @@ namespace Taurus.Runtime.Game
         {
             CancelPhaseTask();
             ClearPendulums();
+            _inputActions?.Dispose();
+            _inputActions = null;
         }
 
         /// <summary> 起動時の初期処理：トップ3記録を読み込み、タイトル初期化後にデフォルトStageをAdditiveロードする。 </summary>
@@ -160,8 +188,6 @@ namespace Taurus.Runtime.Game
 
         private void Update()
         {
-            PollKeyboardInput();
-
             if (_currentPhase != GamePhase.Playing)
             {
                 return;
@@ -186,29 +212,19 @@ namespace Taurus.Runtime.Game
             }
         }
 
-        private void PollKeyboardInput()
+        private void HandleCountUpPerformed(InputAction.CallbackContext context)
         {
-            Keyboard keyboard = Keyboard.current;
-            if (keyboard == null)
-            {
-                return;
-            }
+            HandleSpaceInput();
+        }
 
-            // 長押しキーリピートを無効にするため、押した瞬間（wasPressedThisFrame）のみを受け付ける
-            if (keyboard.spaceKey.wasPressedThisFrame)
-            {
-                HandleSpaceInput();
-            }
+        private void HandleCountDownPerformed(InputAction.CallbackContext context)
+        {
+            HandleCtrlInput();
+        }
 
-            if (keyboard.leftCtrlKey.wasPressedThisFrame || keyboard.rightCtrlKey.wasPressedThisFrame)
-            {
-                HandleCtrlInput();
-            }
-
-            if (keyboard.escapeKey.wasPressedThisFrame)
-            {
-                HandleEscapeInput();
-            }
+        private void HandleCancelPerformed(InputAction.CallbackContext context)
+        {
+            HandleEscapeInput();
         }
 
         /// <summary> Spaceキーおよび相当UIボタンの共通処理。状態に応じてゲージ加算／Wave開始／カウント+1を行う。 </summary>
@@ -271,7 +287,7 @@ namespace Taurus.Runtime.Game
             _titlePressCount = Mathf.Min(TITLE_REQUIRED_PRESSES, _titlePressCount + 1);
             OnTitlePressChanged?.Invoke(_titlePressCount, TITLE_REQUIRED_PRESSES);
 
-            // 10回目の入力でルール説明画面へ進む（ここではまだWave 1を始めない）
+            // 規定回数の入力でルール説明画面へ進む（ここではまだWave 1を始めない）
             if (_titlePressCount >= TITLE_REQUIRED_PRESSES)
             {
                 SetPhase(GamePhase.Rules);

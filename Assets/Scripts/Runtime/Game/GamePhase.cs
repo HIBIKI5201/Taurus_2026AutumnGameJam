@@ -2,11 +2,11 @@ namespace Taurus.Runtime.Game
 {
     /// <summary>
     /// ゲーム全体の画面・進行状態を表す列挙型。
-    /// 遷移フロー：Title →(Space10回)→ Rules →(Space/開始ボタン)→ Playing →(10秒判定)→ Success(1.1秒後次Wave) / Result(タイトルへ戻る)
+    /// 遷移フロー：Title →(Space)→ Rules →(Space/開始ボタン)→ Playing →(10秒判定)→ Success(1.1秒後次Wave) / Result(タイトルへ戻る)
     /// </summary>
     public enum GamePhase
     {
-        /// <summary> タイトル画面（Spaceを10回押してゲージを満タンにする）。 </summary>
+        /// <summary> タイトル画面（Spaceまたは開始ボタンでルール説明画面へ進む）。 </summary>
         Title,
 
         /// <summary> ルール説明画面（3種デモを表示し、Spaceまたは開始ボタンでWave 1へ進む）。 </summary>
