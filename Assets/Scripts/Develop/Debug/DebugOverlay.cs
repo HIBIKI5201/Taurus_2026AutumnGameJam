@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text;
+using SymphonyFrameWork.System.ServiceLocate;
 using Taurus.Runtime.Game;
 using Taurus.Runtime.Input;
 using Taurus.Runtime.Pendulum;
@@ -38,6 +39,8 @@ namespace Taurus.Develop.Debug
             _inputActions ??= new GameInputActions();
             _inputActions.Debug.ToggleOverlay.performed += HandleToggleOverlayPerformed;
             _inputActions.Debug.Enable();
+
+            ResolveGameController();
         }
 
         private void OnDisable()
@@ -55,6 +58,27 @@ namespace Taurus.Develop.Debug
         {
             _inputActions?.Dispose();
             _inputActions = null;
+        }
+
+        private void ResolveGameController()
+        {
+            if (ServiceLocator.TryGetInstance<GameController>(out GameController located))
+            {
+                _gameController = located;
+                return;
+            }
+
+            ServiceLocator.RegisterAfterLocate<GameController>(HandleGameControllerLocated);
+        }
+
+        private void HandleGameControllerLocated(GameController controller)
+        {
+            if (this == null || !isActiveAndEnabled)
+            {
+                return;
+            }
+
+            _gameController = controller;
         }
 
         /// <summary> エディタ構築ツール（ProjectSceneSetupTool）から参照を設定する。 </summary>

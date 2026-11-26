@@ -1,3 +1,4 @@
+using SymphonyFrameWork.System.ServiceLocate;
 using UnityEngine;
 
 namespace Taurus.Runtime.Stage
@@ -6,6 +7,7 @@ namespace Taurus.Runtime.Stage
     /// デザイナーが編集する Stage シーンと、プログラマーが管理する Game シーンをつなぐ唯一の結合点。
     /// 各 Stage シーン（例: Stage_Default.unity）のルート配下に1つ配置し、
     /// 振り子を生成する支点位置（1本時の中央／2本時の左右）をインスペクターで指定する。
+    /// シーンローカルな参照として ServiceLocator（Locator方式）へ自動登録・解除する。
     /// </summary>
     public class StageAnchor : MonoBehaviour
     {
@@ -20,6 +22,23 @@ namespace Taurus.Runtime.Stage
 
         /// <summary> 振り子インスタンスを配置する親Transform。 </summary>
         public Transform PendulumRoot => _pendulumRoot != null ? _pendulumRoot : transform;
+
+        private void OnEnable()
+        {
+            // シーンアンロードと共に破棄されるオブジェクトのため Singleton ではなく Locator で登録する
+            if (!ServiceLocator.RegisterInstance(this, LocateTypeEnum.Locator))
+            {
+                if (ServiceLocator.TryGetInstance<StageAnchor>(out StageAnchor existing) && existing != this)
+                {
+                    Debug.LogWarning($"[{nameof(StageAnchor)}] 既に別の StageAnchor ({existing.name}) が登録されています。", this);
+                }
+            }
+        }
+
+        private void OnDisable()
+        {
+            ServiceLocator.UnregisterInstance(this);
+        }
 
         /// <summary> 振り子の合計本数とインデックスに応じた支点Transformを返す。 </summary>
         public Transform GetPivot(int index, int totalCount)

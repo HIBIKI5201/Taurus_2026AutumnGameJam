@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using SymphonyFrameWork.System.ServiceLocate;
 using Taurus.Runtime.Game;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,6 +9,7 @@ namespace Taurus.Runtime.UI
     /// <summary>
     /// Canvas 配下の Title / Rules / Game / Result 各パネルの表示切替と、
     /// Wave番号・残り時間・2桁カウンター・トップ3記録の描画を担当する UI コントローラ。
+    /// GameController は ServiceLocator（未登録時は Inspector 参照）経由で安全に接続する。
     ///
     /// 【引き継ぎポイント】
     /// - 全てのボタンクリックは GameController の共通入力メソッド（HandleSpaceInput 等）へ転送しており、
@@ -48,6 +50,8 @@ namespace Taurus.Runtime.UI
         [SerializeField] private Button _retryButton;
         [SerializeField] private Button _homeButton;
 
+        private GameController _subscribedController;
+
         private void Awake()
         {
             BindButtons();
@@ -55,36 +59,14 @@ namespace Taurus.Runtime.UI
 
         private void OnEnable()
         {
-            if (_gameController == null)
-            {
-                return;
-            }
-
-            _gameController.OnPhaseChanged += HandlePhaseChanged;
-            _gameController.OnTitlePressChanged += HandleTitlePressChanged;
-            _gameController.OnWaveStarted += HandleWaveStarted;
-            _gameController.OnTimerUpdated += HandleTimerUpdated;
-            _gameController.OnPlayerCountChanged += HandlePlayerCountChanged;
-            _gameController.OnWaveSucceeded += HandleWaveSucceeded;
-            _gameController.OnGameFinished += HandleGameFinished;
-
-            SyncInitialState();
+            ServiceLocator.RegisterInstance(this, LocateTypeEnum.Locator);
+            ResolveAndBindGameController();
         }
 
         private void OnDisable()
         {
-            if (_gameController == null)
-            {
-                return;
-            }
-
-            _gameController.OnPhaseChanged -= HandlePhaseChanged;
-            _gameController.OnTitlePressChanged -= HandleTitlePressChanged;
-            _gameController.OnWaveStarted -= HandleWaveStarted;
-            _gameController.OnTimerUpdated -= HandleTimerUpdated;
-            _gameController.OnPlayerCountChanged -= HandlePlayerCountChanged;
-            _gameController.OnWaveSucceeded -= HandleWaveSucceeded;
-            _gameController.OnGameFinished -= HandleGameFinished;
+            UnbindGameController();
+            ServiceLocator.UnregisterInstance(this);
         }
 
         /// <summary> エディタ構築ツール（ProjectSceneSetupTool）からUI参照を一括設定する。 </summary>
@@ -167,19 +149,85 @@ namespace Taurus.Runtime.UI
             }
         }
 
-        /// <summary> 有効化直後に現在の GameController 状態を画面へ同期する。 </summary>
-        private void SyncInitialState()
+        private void ResolveAndBindGameController()
         {
-            if (_gameController == null)
+            if (ServiceLocator.TryGetInstance<GameController>(out GameController located))
+            {
+                BindGameController(located);
+                return;
+            }
+
+            if (_gameController != null)
+            {
+                BindGameController(_gameController);
+            }
+
+            ServiceLocator.RegisterAfterLocate<GameController>(HandleGameControllerLocated);
+        }
+
+        private void HandleGameControllerLocated(GameController controller)
+        {
+            if (this == null || !isActiveAndEnabled)
             {
                 return;
             }
 
-            HandlePhaseChanged(_gameController.CurrentPhase);
+            BindGameController(controller);
+        }
+
+        private void BindGameController(GameController controller)
+        {
+            if (controller == null || ReferenceEquals(_subscribedController, controller))
+            {
+                return;
+            }
+
+            UnbindGameController();
+            _subscribedController = controller;
+            _gameController = controller;
+
+            _subscribedController.OnPhaseChanged += HandlePhaseChanged;
+            _subscribedController.OnTitlePressChanged += HandleTitlePressChanged;
+            _subscribedController.OnWaveStarted += HandleWaveStarted;
+            _subscribedController.OnTimerUpdated += HandleTimerUpdated;
+            _subscribedController.OnPlayerCountChanged += HandlePlayerCountChanged;
+            _subscribedController.OnWaveSucceeded += HandleWaveSucceeded;
+            _subscribedController.OnGameFinished += HandleGameFinished;
+
+            SyncInitialState();
+        }
+
+        private void UnbindGameController()
+        {
+            if (_subscribedController == null)
+            {
+                return;
+            }
+
+            _subscribedController.OnPhaseChanged -= HandlePhaseChanged;
+            _subscribedController.OnTitlePressChanged -= HandleTitlePressChanged;
+            _subscribedController.OnWaveStarted -= HandleWaveStarted;
+            _subscribedController.OnTimerUpdated -= HandleTimerUpdated;
+            _subscribedController.OnPlayerCountChanged -= HandlePlayerCountChanged;
+            _subscribedController.OnWaveSucceeded -= HandleWaveSucceeded;
+            _subscribedController.OnGameFinished -= HandleGameFinished;
+            _subscribedController = null;
+        }
+
+        /// <summary> 有効化直後に現在の GameController 状態を画面へ同期する。 </summary>
+        private void SyncInitialState()
+        {
+            GameController controller = _subscribedController != null ? _subscribedController : _gameController;
+            if (controller == null)
+            {
+                return;
+            }
+
+            HandlePhaseChanged(controller.CurrentPhase);
             HandleTitlePressChanged(0, GameController.TITLE_REQUIRED_PRESSES);
-            HandleWaveStarted(_gameController.CurrentWave);
-            HandleTimerUpdated(_gameController.WaveRemainingSeconds);
-            HandlePlayerCountChanged(_gameController.PlayerCount, 0);
+            HandleWaveStarted(controller.CurrentWave);
+            HandleTimerUpdated(controller.WaveRemainingSeconds);
+            HandlePlayerCountChanged(controller.PlayerCount, 0);
         }
 
         private void HandlePhaseChanged(GamePhase phase)
@@ -293,29 +341,31 @@ namespace Taurus.Runtime.UI
             }
         }
 
+        private GameController ActiveController => _subscribedController != null ? _subscribedController : _gameController;
+
         private void HandleTitleStartButtonClicked()
         {
-            _gameController?.HandleSpaceInput();
+            ActiveController?.HandleSpaceInput();
         }
 
         private void HandleRulesStartButtonClicked()
         {
-            _gameController?.HandleStartGameInput();
+            ActiveController?.HandleStartGameInput();
         }
 
         private void HandlePlusButtonClicked()
         {
-            _gameController?.HandleSpaceInput();
+            ActiveController?.HandleSpaceInput();
         }
 
         private void HandleMinusButtonClicked()
         {
-            _gameController?.HandleCtrlInput();
+            ActiveController?.HandleCtrlInput();
         }
 
         private void HandleReturnToTitleClicked()
         {
-            _gameController?.HandleReturnToTitleInput();
+            ActiveController?.HandleReturnToTitleInput();
         }
     }
 }
