@@ -69,6 +69,7 @@ namespace Taurus.Runtime.UI
         private GameController _subscribedController;
         private float _feedbackHideTimer;
         private MotionHandle _waveFadeMotionHandle;
+        private MotionHandle _popMotionHandle;
 
         /// <summary> Wave切替時の暗転時間（秒）。Inspectorから変更可能。 </summary>
         public float WaveFadeDurationSeconds => Mathf.Max(0f, _waveFadeDurationSeconds);
@@ -103,6 +104,7 @@ namespace Taurus.Runtime.UI
         private void OnDisable()
         {
             CancelWaveFadeMotion();
+            CancelPopMotion();
             UnbindGameController();
             ServiceLocator.UnregisterInstance(this);
         }
@@ -347,7 +349,18 @@ namespace Taurus.Runtime.UI
 
         private void HandleWaveSucceeded(int expectedCount, int nextWave)
         {
-            if (_feedbackText != null)
+            // 上部バナーと下部テキストの視線分散を防ぐため、_successBanner がある場合はバナー側へ表示を統一する
+            Text bannerText = _successBanner != null ? _successBanner.GetComponentInChildren<Text>(true) : null;
+            if (bannerText != null)
+            {
+                bannerText.text = $"CLEAR!  正解 {expectedCount}回\n次は WAVE {nextWave:00}";
+                PlayScalePop(_successBanner.transform, 0.86f, 0.24f);
+                if (_feedbackText != null)
+                {
+                    _feedbackText.text = string.Empty;
+                }
+            }
+            else if (_feedbackText != null)
             {
                 _feedbackText.text = $"正解！（{expectedCount}回） 次のウェーブへ";
             }
@@ -358,14 +371,20 @@ namespace Taurus.Runtime.UI
 
         private void HandleGameFinished(int clearedWaves, int expectedCount, int playerCount, IReadOnlyList<int> records)
         {
+            bool isNewTopRecord = GameAudioHooks.IsTopRecord(clearedWaves, records);
+            string rankLabel = FormatResultRankLabel(clearedWaves, isNewTopRecord);
+            Color rankColor = GetResultRankColor(clearedWaves);
+
             if (_clearedWavesText != null)
             {
                 _clearedWavesText.text = clearedWaves.ToString();
+                _clearedWavesText.color = rankColor;
+                PlayScalePop(_clearedWavesText.transform, isNewTopRecord ? 0.75f : 0.88f, 0.35f);
             }
 
             if (_resultDetailText != null)
             {
-                _resultDetailText.text = $"YOUR COUNT: {playerCount:00}  /  ANSWER: {expectedCount:00}";
+                _resultDetailText.text = $"{rankLabel}\nYOUR COUNT: {playerCount:00}  /  ANSWER: {expectedCount:00}";
             }
 
             if (_recordValueTexts != null)
@@ -382,6 +401,71 @@ namespace Taurus.Runtime.UI
                         ? records[i].ToString("00")
                         : "—";
                 }
+            }
+        }
+
+        /// <summary> クリアWave数に応じた Peak-End ランク評価ラベルを返す。 </summary>
+        public static string FormatResultRankLabel(int clearedWaves, bool isNewRecord)
+        {
+            string rank;
+            if (clearedWaves >= 15)
+            {
+                rank = "S RANK - COMPLETE!（全15層制覇）";
+            }
+            else if (clearedWaves >= 10)
+            {
+                rank = "A RANK - MASTER!（上級領域到達）";
+            }
+            else if (clearedWaves >= 4)
+            {
+                rank = "B RANK - GREAT!（好記録）";
+            }
+            else if (clearedWaves >= 1)
+            {
+                rank = "C RANK - NICE TRY!";
+            }
+            else
+            {
+                rank = "TRY AGAIN!";
+            }
+
+            return isNewRecord ? $"★ NEW RECORD ★  {rank}" : rank;
+        }
+
+        private static Color GetResultRankColor(int clearedWaves)
+        {
+            if (clearedWaves >= 15) return new Color(1.0f, 0.85f, 0.20f, 1f); // ゴールド
+            if (clearedWaves >= 10) return new Color(0.84f, 1.0f, 0.35f, 1f); // ライム
+            if (clearedWaves >= 4) return new Color(0.35f, 0.90f, 1.0f, 1f);  // シアン
+            return Color.white;
+        }
+
+        private void PlayScalePop(Transform target, float startScale, float duration)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            CancelPopMotion();
+            target.localScale = Vector3.one * startScale;
+            _popMotionHandle = LMotion.Create(startScale, 1f, duration)
+                .WithEase(Ease.OutBack)
+                .WithScheduler(MotionScheduler.UpdateIgnoreTimeScale)
+                .Bind(target, static (scale, tr) =>
+                {
+                    if (tr != null)
+                    {
+                        tr.localScale = Vector3.one * scale;
+                    }
+                });
+        }
+
+        private void CancelPopMotion()
+        {
+            if (_popMotionHandle.IsActive())
+            {
+                _popMotionHandle.Cancel();
             }
         }
 

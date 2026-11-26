@@ -46,6 +46,17 @@ namespace Taurus.Runtime.Game
         [Tooltip("クリアしたWave数がこの値以上なら、リザルトで明るいBGM（_resultHighBgmClip）を流す")]
         [SerializeField] private int _resultHighMinClearedWaves = 4;
 
+        [Header("SE 冒頭無音トリミング（再生遅延解消・音量補正）")]
+        [Tooltip("ON のとき、SE クリップ先頭の無音区間を自動検出し、鳴り始めから即座に再生する")]
+        [SerializeField] private bool _autoTrimLeadingSilence = true;
+
+        [Tooltip("無音とみなす振幅しきい値（この値を超えたフレームから再生する）")]
+        [SerializeField, Range(0.001f, 0.1f)] private float _silenceThreshold = 0.015f;
+
+        [Tooltip("SE 全体の再生音量倍率")]
+        [SerializeField, Range(0f, 1.5f)] private float _seVolumeScale = 1.0f;
+
+        private readonly Dictionary<AudioClip, AudioClip> _trimmedClipCache = new Dictionary<AudioClip, AudioClip>();
         private GameController _subscribedController;
         private bool _hasObservedPhase;
         private GamePhase _lastPhase;
@@ -60,6 +71,19 @@ namespace Taurus.Runtime.Game
         private void OnDisable()
         {
             UnbindGameController();
+        }
+
+        private void OnDestroy()
+        {
+            foreach (KeyValuePair<AudioClip, AudioClip> pair in _trimmedClipCache)
+            {
+                if (pair.Value != null && !ReferenceEquals(pair.Value, pair.Key))
+                {
+                    Destroy(pair.Value);
+                }
+            }
+
+            _trimmedClipCache.Clear();
         }
 
         /// <summary> エディタ構築ツール（ProjectSceneSetupTool）から参照を設定する。 </summary>
@@ -326,10 +350,94 @@ namespace Taurus.Runtime.Game
         private void PlaySe(AudioClip clip)
         {
             AudioSource source = ResolveAudioSource(_seAudioGroup, _seSource);
-            if (source != null && clip != null)
+            if (source == null || clip == null)
             {
-                source.PlayOneShot(clip);
+                return;
             }
+
+            AudioClip playable = _autoTrimLeadingSilence ? GetOrCreateTrimmedClip(clip) : clip;
+            source.PlayOneShot(playable, Mathf.Clamp(_seVolumeScale, 0f, 1.5f));
+        }
+
+        /// <summary>
+        /// PCM サンプル配列の先頭から無音区間を走査し、最初に振幅が threshold を超えるフレーム位置を返す。
+        /// </summary>
+        public static int FindFirstAudibleFrame(float[] samples, int channels, float threshold)
+        {
+            if (samples == null || samples.Length == 0 || channels <= 0)
+            {
+                return 0;
+            }
+
+            int totalFrames = samples.Length / channels;
+            float clampedThreshold = Mathf.Max(0.0001f, threshold);
+            for (int frame = 0; frame < totalFrames; frame++)
+            {
+                int baseIndex = frame * channels;
+                for (int ch = 0; ch < channels; ch++)
+                {
+                    if (Mathf.Abs(samples[baseIndex + ch]) >= clampedThreshold)
+                    {
+                        return frame;
+                    }
+                }
+            }
+
+            return 0;
+        }
+
+        private AudioClip GetOrCreateTrimmedClip(AudioClip original)
+        {
+            if (original == null)
+            {
+                return null;
+            }
+
+            if (_trimmedClipCache.TryGetValue(original, out AudioClip cached) && cached != null)
+            {
+                return cached;
+            }
+
+            AudioClip result = original;
+            try
+            {
+                if (original.loadType == AudioClipLoadType.DecompressOnLoad && original.samples > 0 && original.channels > 0)
+                {
+                    float[] samples = new float[original.samples * original.channels];
+                    if (original.GetData(samples, 0))
+                    {
+                        int firstAudible = FindFirstAudibleFrame(samples, original.channels, _silenceThreshold);
+                        // 約 2ms の余裕を残してクリックノイズを防ぐ
+                        int marginFrames = Mathf.RoundToInt(original.frequency * 0.002f);
+                        int trimStart = Mathf.Max(0, firstAudible - marginFrames);
+                        int remainingFrames = original.samples - trimStart;
+
+                        // 10ms 以上の無音がある場合のみトリミング版クリップを生成
+                        int minTrimFrames = Mathf.RoundToInt(original.frequency * 0.010f);
+                        if (trimStart >= minTrimFrames && remainingFrames > 64)
+                        {
+                            float[] trimmedSamples = new float[remainingFrames * original.channels];
+                            System.Array.Copy(samples, trimStart * original.channels, trimmedSamples, 0, trimmedSamples.Length);
+
+                            AudioClip trimmed = AudioClip.Create(
+                                $"{original.name}_Trimmed",
+                                remainingFrames,
+                                original.channels,
+                                original.frequency,
+                                false);
+                            trimmed.SetData(trimmedSamples, 0);
+                            result = trimmed;
+                        }
+                    }
+                }
+            }
+            catch (System.Exception)
+            {
+                result = original;
+            }
+
+            _trimmedClipCache[original] = result;
+            return result;
         }
 
         private void PlayBgm(AudioClip clip)

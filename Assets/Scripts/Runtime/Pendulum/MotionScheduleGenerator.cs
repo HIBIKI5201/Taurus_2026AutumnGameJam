@@ -128,8 +128,8 @@ namespace Taurus.Runtime.Pendulum
             uint state = seed;
             List<MotionSegment> segments = new List<MotionSegment>(16);
 
-            int direction = NextRandom01(ref state) < 0.5 ? 1 : -1;
             double rotation = SampleInitialRotation(ref state);
+            int direction = DetermineGravityInitialDirection(rotation, ref state);
 
             double elapsedCursor = 0.0;
             int totalCount = 0;
@@ -397,8 +397,8 @@ namespace Taurus.Runtime.Pendulum
             List<MotionSegment> segments = new List<MotionSegment>(plannedSeconds);
             int remaining = plannedSeconds;
 
-            int direction = NextRandom01(ref state) < 0.5 ? 1 : -1;
             double rotation = SampleInitialRotation(ref state);
+            int direction = DetermineGravityInitialDirection(rotation, ref state);
 
             int totalCount = 0;
 
@@ -444,6 +444,21 @@ namespace Taurus.Runtime.Pendulum
 
             schedule = new MotionSchedule(segments.ToArray(), totalCount, rotation, seed);
             return true;
+        }
+
+        /// <summary>
+        /// 初手の回転方向を重力方向に整合させる。
+        /// θ=0 が真下のため、sinθ &gt; 0（右側）なら -1、sinθ &lt; 0（左側）なら +1 として必ず最下点側へ落ち始める。
+        /// </summary>
+        private static int DetermineGravityInitialDirection(double initialRotation, ref uint state)
+        {
+            double sinTheta = Math.Sin(initialRotation);
+            if (Math.Abs(sinTheta) < 1e-6)
+            {
+                return NextRandom01(ref state) < 0.5 ? 1 : -1;
+            }
+
+            return sinTheta > 0.0 ? -1 : 1;
         }
 
         private static double SampleInitialRotation(ref uint state)

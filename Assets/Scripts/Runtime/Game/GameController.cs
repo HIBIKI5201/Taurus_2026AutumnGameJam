@@ -47,6 +47,9 @@ namespace Taurus.Runtime.Game
         // 二重振り子（2重）Prefab。PendulumMotion がアタッチされていること
         [SerializeField] private PendulumMotion _doublePendulumPrefab;
 
+        // 三重振り子（3重）Prefab。未設定時は _doublePendulumPrefab をランタイム拡張して3段目を自動生成する
+        [SerializeField] private PendulumMotion _triplePendulumPrefab;
+
         [Header("Debug / Seed Override")]
         // true にすると毎回 _fixedSeed を使って同一パターンを再現できる（QA・再現テスト用）
         [SerializeField] private bool _useFixedSeed;
@@ -391,39 +394,62 @@ namespace Taurus.Runtime.Game
 
             int singleCount = config.SinglePendulumCount;
             int doubleCount = config.DoublePendulumCount;
-            int totalCount = singleCount + doubleCount;
+            int tripleCount = config.TriplePendulumCount;
+            int totalCount = singleCount + doubleCount + tripleCount;
             float now = Time.unscaledTime;
 
             int expectedTotal = 0;
 
             for (int i = 0; i < totalCount; i++)
             {
-                bool isDouble = i >= singleCount;
-                PendulumMotion prefab = isDouble ? _doublePendulumPrefab : _singlePendulumPrefab;
+                bool isTriple = i >= singleCount + doubleCount;
+                bool isDouble = !isTriple && i >= singleCount;
+
+                PendulumMotion prefab = isTriple
+                    ? (_triplePendulumPrefab != null ? _triplePendulumPrefab : _doublePendulumPrefab)
+                    : (isDouble ? _doublePendulumPrefab : _singlePendulumPrefab);
                 if (prefab == null)
                 {
-                    Debug.LogError($"[{nameof(GameController)}] {(isDouble ? "Double" : "Single")} 振り子Prefabが未設定です。", this);
+                    Debug.LogError($"[{nameof(GameController)}] {(isTriple ? "Triple" : (isDouble ? "Double" : "Single"))} 振り子Prefabが未設定です。", this);
                     continue;
                 }
 
                 Transform pivot = anchor != null ? anchor.GetPivot(i, totalCount) : parentRoot;
                 PendulumMotion instance = Instantiate(prefab, pivot.position, Quaternion.LookRotation(Vector3.back, Vector3.up), parentRoot);
-                instance.name = isDouble ? $"PendulumDouble_{i + 1:00}" : $"PendulumSingle_{i + 1:00}";
+                instance.name = isTriple
+                    ? $"PendulumTriple_{i + 1:00}"
+                    : (isDouble ? $"PendulumDouble_{i + 1:00}" : $"PendulumSingle_{i + 1:00}");
 
-                // HTML参照実装と同じシード導出式：Wave番号と玉インデックスから素数オフセットで独立シードを作る
-                int ix = _currentWave * 17 + i * 2 + 1;
+                if (isTriple && instance.EnsureGrandchildRig(out Transform grandBob, out Renderer grandRenderer))
+                {
+                    PendulumVisualFeedback feedback = instance.GetComponent<PendulumVisualFeedback>();
+                    if (feedback != null)
+                    {
+                        feedback.ConfigureGrandchildMeshBob(grandBob, grandRenderer);
+                    }
+                }
+
+                // HTML参照実装と同系統のシード導出式：Wave番号と玉インデックスから素数オフセットで独立シードを作る
+                int ix = _currentWave * 17 + i * 3 + 1;
                 uint parentSeed = unchecked(_runSeed + (uint)(ix * 7919));
                 MotionSchedule parentSchedule = MotionScheduleGenerator.Generate(parentSeed, config);
 
                 MotionSchedule childSchedule = null;
-                if (isDouble)
+                if (isDouble || isTriple)
                 {
                     uint childSeed = unchecked(_runSeed + (uint)((ix + 1) * 7919));
                     childSchedule = MotionScheduleGenerator.Generate(childSeed, config);
                 }
 
+                MotionSchedule grandchildSchedule = null;
+                if (isTriple)
+                {
+                    uint grandchildSeed = unchecked(_runSeed + (uint)((ix + 2) * 7919));
+                    grandchildSchedule = MotionScheduleGenerator.Generate(grandchildSeed, config);
+                }
+
                 instance.OnTopCrossed += HandlePendulumTopCrossed;
-                instance.Initialize(i, parentSchedule, childSchedule, now);
+                instance.Initialize(i, parentSchedule, childSchedule, now, grandchildSchedule);
 
                 expectedTotal += instance.TotalExpectedTopCount;
                 _activePendulums.Add(instance);
