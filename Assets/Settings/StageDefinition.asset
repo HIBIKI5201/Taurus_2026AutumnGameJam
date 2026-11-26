@@ -1,0 +1,126 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 81c4bded77d703046954907e7447f0f2, type: 3}
+  m_Name: StageDefinition
+  m_EditorClassIdentifier: Assembly-CSharp::Taurus.Runtime.Stage.StageDefinition
+  _waves:
+  - _singlePendulumCount: 1
+    _doublePendulumCount: 0
+    _choices:
+    - _weight: 70
+      _topCount: 0
+      _durationSeconds: 1
+    - _weight: 20
+      _topCount: 1
+      _durationSeconds: 1
+    - _weight: 10
+      _topCount: 2
+      _durationSeconds: 1
+  - _singlePendulumCount: 1
+    _doublePendulumCount: 0
+    _choices:
+    - _weight: 60
+      _topCount: 0
+      _durationSeconds: 1
+    - _weight: 25
+      _topCount: 1
+      _durationSeconds: 1
+    - _weight: 10
+      _topCount: 2
+      _durationSeconds: 1
+    - _weight: 5
+      _topCount: 3
+      _durationSeconds: 1
+  - _singlePendulumCount: 2
+    _doublePendulumCount: 0
+    _choices:
+    - _weight: 70
+      _topCount: 0
+      _durationSeconds: 1
+    - _weight: 20
+      _topCount: 1
+      _durationSeconds: 1
+    - _weight: 10
+      _topCount: 2
+      _durationSeconds: 1
+  - _singlePendulumCount: 2
+    _doublePendulumCount: 0
+    _choices:
+    - _weight: 53
+      _topCount: 0
+      _durationSeconds: 1
+    - _weight: 25
+      _topCount: 1
+      _durationSeconds: 1
+    - _weight: 15
+      _topCount: 2
+      _durationSeconds: 1
+    - _weight: 5
+      _topCount: 3
+      _durationSeconds: 1
+    - _weight: 2
+      _topCount: 4
+      _durationSeconds: 1
+  - _singlePendulumCount: 0
+    _doublePendulumCount: 1
+    _choices:
+    - _weight: 69
+      _topCount: 0
+      _durationSeconds: 1
+    - _weight: 31
+      _topCount: 1
+      _durationSeconds: 1
+  - _singlePendulumCount: 0
+    _doublePendulumCount: 1
+    _choices:
+    - _weight: 65
+      _topCount: 0
+      _durationSeconds: 1
+    - _weight: 25
+      _topCount: 1
+      _durationSeconds: 1
+    - _weight: 7
+      _topCount: 2
+      _durationSeconds: 1
+    - _weight: 2
+      _topCount: 3
+      _durationSeconds: 1
+    - _weight: 1
+      _topCount: 4
+      _durationSeconds: 1
+  - _singlePendulumCount: 0
+    _doublePendulumCount: 2
+    _choices:
+    - _weight: 80
+      _topCount: 0
+      _durationSeconds: 1
+    - _weight: 17
+      _topCount: 1
+      _durationSeconds: 1
+    - _weight: 3
+      _topCount: 2
+      _durationSeconds: 1
+  - _singlePendulumCount: 0
+    _doublePendulumCount: 2
+    _choices:
+    - _weight: 70
+      _topCount: 0
+      _durationSeconds: 1
+    - _weight: 18
+      _topCount: 1
+      _durationSeconds: 1
+    - _weight: 8
+      _topCount: 2
+      _durationSeconds: 1
+    - _weight: 4
+      _topCount: 3
+      _durationSeconds: 1

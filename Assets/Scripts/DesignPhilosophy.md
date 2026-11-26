@@ -1,28 +1,33 @@
 # 設計方針
 
-SymphonyKillChord の設計思想を、ゲームジャム向けに軽くしたもの。
-「短期間で作り切る」「数人で同時に触っても壊れにくい」を優先し、レイヤー分けは最小限にする。
+## フォルダ
 
-## フォルダと名前空間
+| フォルダ | 内容 |
+| --- | --- |
+| `Assets/Scripts/Runtime` | ゲーム本体のコード。機能ごとにフォルダを切る（例: `Runtime/Player`） |
+| `Assets/Scripts/Develop` | デバッグ用のコード。製品に入れたくないもの |
+| `Assets/Scripts/Editor` | エディタ拡張 |
+| `Assets/Scripts/Shaders` | シェーダー |
 
-| フォルダ | 名前空間 | 内容 |
-| --- | --- | --- |
-| `Assets/Scripts/Runtime` | `Taurus.Runtime.*` | ゲーム本体。エディタ専用の API を使わない |
-| `Assets/Scripts/Editor` | `Taurus.Editor.*` | エディタ拡張・ツール |
+名前空間は `Taurus.<Runtime / Develop / Editor>` の後ろに機能フォルダ名を付ける。
 
-名前空間はフォルダ構成をそのまま反映する（例: `Assets/Scripts/Runtime/Player/PlayerMover.cs` → `Taurus.Runtime.Player`）。
+| フォルダ | 名前空間の例 |
+| --- | --- |
+| `Runtime/Player` | `Taurus.Runtime.Player` |
+| `Develop/Cheat` | `Taurus.Develop.Cheat` |
+| `Editor/LevelTool` | `Taurus.Editor.LevelTool` |
 
-## 役割の分け方
+Project Settings（Editor → Root namespace）には `Taurus.Runtime` を設定してあるので、新しく作ったスクリプトにはこれが自動で入る。`Develop`・`Editor` に作ったときは手で書き換える。
 
-機能ごとにフォルダを切り、その中で必要に応じて次の役割にクラスを分ける。小さな機能は無理に分けなくてよい。
+## 書き方
 
-- **Data**: パラメータや状態を持つクラス・ScriptableObject。ゲームロジックを持たない。
-- **Logic**: ゲームのルールを処理するピュアクラス。`MonoBehaviour` を継承しない（`UnityEngine` の型を使うのはよい）。
-- **View**: `MonoBehaviour`。入力を受け取り、表示・演出・GameObject の操作を行う。ルールの判断は Logic に任せる。
-- **Composition**: シーンの初期化役。各クラスを生成してつなぐ。依存は SymphonyFramework の ServiceLocator に登録するか、直接渡す。
+- MonoBehaviour で素直に書いてよい。レイヤー分け・インターフェース・抽象化は、必要になるまで作らない。
+- 1 クラスが大きくなって触りにくくなったら分ける。最初から分けない。
+- 調整したい数値は `[SerializeField]` にして、インスペクターで触れるようにする。
+- 他のオブジェクトへの参照は `[SerializeField]` でつなぐ。
 
-## 基本の考え
+## チームで壊さないために
 
-- KISS: 迷ったら単純な方を選ぶ。将来の拡張のための抽象化はしない。
-- 参照は `[SerializeField]` か Composition から渡す。シーンを走査して探さない。
-- 値の変化の通知は R3、非同期は UniTask、トゥイーンは LitMotion を使う。
+- 1 つのシーンを複数人で同時に編集しない。自分の作業は Prefab か自分用のシーンで行い、メインシーンへの配置は担当者が行う。
+- 他の人が作ったクラスを大きく書き換えるときは、一声かける。
+- 迷ったら単純な方を選ぶ。
