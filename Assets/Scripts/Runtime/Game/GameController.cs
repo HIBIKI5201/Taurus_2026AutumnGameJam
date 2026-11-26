@@ -24,6 +24,10 @@ namespace Taurus.Runtime.Game
     /// </summary>
     public class GameController : MonoBehaviour
     {
+        /// <summary> リザルト画面に入ってからキー入力（リトライ／タイトルへ戻る）を受け付けるまでの秒数。
+        /// プレイ中に連打していた Space でリザルトを読み飛ばさないための猶予。 </summary>
+        public const float RESULT_INPUT_DELAY_SECONDS = 0.5f;
+
         /// <summary> タイトル画面からルール画面へ進むのに必要な Space 押下回数。 </summary>
         public const int TITLE_REQUIRED_PRESSES = 1;
 
@@ -69,6 +73,9 @@ namespace Taurus.Runtime.Game
         private bool _isStageReady;
         private string _ownerSceneName;
         private bool _isDuplicateInstance;
+
+        // リザルト画面に入った時刻（Time.unscaledTime）。入力猶予の判定に使う
+        private float _resultEnteredTime;
 
         // Success 待機中の UniTask をリセットや破棄時に安全にキャンセルするためのトークンソース
         private CancellationTokenSource _phaseCts;
@@ -281,7 +288,7 @@ namespace Taurus.Runtime.Game
             HandleEscapeInput();
         }
 
-        /// <summary> Spaceキーおよび相当UIボタンの共通処理。状態に応じてゲージ加算／Wave開始／カウント+1を行う。 </summary>
+        /// <summary> Spaceキーおよび相当UIボタンの共通処理。状態に応じてゲージ加算／Wave開始／カウント+1／リトライを行う。 </summary>
         public void HandleSpaceInput()
         {
             switch (_currentPhase)
@@ -295,15 +302,31 @@ namespace Taurus.Runtime.Game
                 case GamePhase.Playing:
                     AddPlayerCount(1);
                     break;
+                case GamePhase.Result:
+                    if (IsResultInputReady())
+                    {
+                        RetryFromResult();
+                    }
+
+                    break;
             }
         }
 
-        /// <summary> Ctrlキーおよび-1ボタンの共通処理。プレイ中のみカウントを-1する（下限0）。 </summary>
+        /// <summary> Ctrlキーおよび-1ボタンの共通処理。プレイ中はカウントを-1（下限0）、リザルト画面ではタイトルへ戻る。 </summary>
         public void HandleCtrlInput()
         {
-            if (_currentPhase == GamePhase.Playing)
+            switch (_currentPhase)
             {
-                AddPlayerCount(-1);
+                case GamePhase.Playing:
+                    AddPlayerCount(-1);
+                    break;
+                case GamePhase.Result:
+                    if (IsResultInputReady())
+                    {
+                        ResetToTitle();
+                    }
+
+                    break;
             }
         }
 
@@ -325,10 +348,32 @@ namespace Taurus.Runtime.Game
             }
         }
 
-        /// <summary> リザルト画面の「もう一度遊ぶ」「タイトルへ戻る」ボタンの共通処理（仕様上いずれもタイトルへ戻す）。 </summary>
+        /// <summary> リザルト画面の「もう一度遊ぶ」ボタンの処理。Wave 1 からやり直す。 </summary>
+        public void HandleRetryInput()
+        {
+            if (_currentPhase == GamePhase.Result)
+            {
+                RetryFromResult();
+            }
+        }
+
+        /// <summary> リザルト画面の「タイトルへ戻る」ボタンの処理。 </summary>
         public void HandleReturnToTitleInput()
         {
             ResetToTitle();
+        }
+
+        private bool IsResultInputReady()
+        {
+            return Time.unscaledTime - _resultEnteredTime >= RESULT_INPUT_DELAY_SECONDS;
+        }
+
+        /// <summary> リザルト画面から、ルール説明を挟まずに Wave 1 からやり直す。 </summary>
+        private void RetryFromResult()
+        {
+            CancelPhaseTask();
+            _expectedCount = 0;
+            StartRunFromRules();
         }
 
         private void IncrementTitlePress()
@@ -579,6 +624,7 @@ namespace Taurus.Runtime.Game
         private void FinishRun()
         {
             CancelPhaseTask();
+            _resultEnteredTime = Time.unscaledTime;
             SetPhase(GamePhase.Result);
 
             int clearedWaves = Mathf.Max(0, _currentWave - 1);

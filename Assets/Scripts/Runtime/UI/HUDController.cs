@@ -180,7 +180,7 @@ namespace Taurus.Runtime.UI
 
             if (_retryButton != null)
             {
-                _retryButton.onClick.AddListener(HandleReturnToTitleClicked);
+                _retryButton.onClick.AddListener(HandleRetryClicked);
             }
 
             if (_homeButton != null)
@@ -608,6 +608,11 @@ namespace Taurus.Runtime.UI
         private void HandleMinusButtonClicked()
         {
             ActiveController?.HandleCtrlInput();
+        }
+
+        private void HandleRetryClicked()
+        {
+            ActiveController?.HandleRetryInput();
         }
 
         private void HandleReturnToTitleClicked()
