@@ -1,6 +1,7 @@
 using System;
 using Cysharp.Threading.Tasks;
-using SymphonyFrameWork.Attribute;
+using SymphonyFramework.Attribute;
+using SymphonyFramework.Scenes;
 using SymphonyFrameWork.System.SceneLoad;
 using Taurus.Runtime.Stage;
 using UnityEngine;

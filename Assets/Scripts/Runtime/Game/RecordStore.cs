@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading;
 using Cysharp.Threading.Tasks;
-using SymphonyFrameWork.Exceptions;
+using SymphonyFramework.Exceptions;
 using SymphonyFrameWork.System.SaveSystem;
 using UnityEngine;
 
