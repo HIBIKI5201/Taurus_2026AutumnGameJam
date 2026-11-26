@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using LitMotion;
 using SymphonyFrameWork.System.ServiceLocate;
 using Taurus.Runtime.Game;
 using UnityEngine;
@@ -59,12 +60,15 @@ namespace Taurus.Runtime.UI
         [Header("Wave Transition Fade（UIの背面に描画しUIを隠さない暗転）")]
         // Wave切替時の暗転合計時間（秒）。前半で暗転、ピークでWave切替、後半で明転する
         [SerializeField, Min(0f)] private float _waveFadeDurationSeconds = 0.5f;
+        // 暗転・明転に使うLitMotionのイージング（初期値は線形補間）
+        [SerializeField] private Ease _waveFadeEase = Ease.Linear;
         // 暗転用オーバーレイ画像（未設定時はCanvas先頭に自動生成する）
         [SerializeField] private Image _waveFadeOverlay;
         [SerializeField] private Color _waveFadeColor = Color.black;
 
         private GameController _subscribedController;
         private float _feedbackHideTimer;
+        private MotionHandle _waveFadeMotionHandle;
 
         /// <summary> Wave切替時の暗転時間（秒）。Inspectorから変更可能。 </summary>
         public float WaveFadeDurationSeconds => Mathf.Max(0f, _waveFadeDurationSeconds);
@@ -98,6 +102,7 @@ namespace Taurus.Runtime.UI
 
         private void OnDisable()
         {
+            CancelWaveFadeMotion();
             UnbindGameController();
             ServiceLocator.UnregisterInstance(this);
         }
@@ -426,24 +431,37 @@ namespace Taurus.Runtime.UI
 
         private async UniTask AnimateWaveFadeAsync(float fromAlpha, float toAlpha, float duration, CancellationToken cancellationToken)
         {
+            CancelWaveFadeMotion();
+
             if (duration <= 0f)
             {
                 SetWaveFadeAlpha(toAlpha);
                 return;
             }
 
-            float elapsed = 0f;
             SetWaveFadeAlpha(fromAlpha);
 
-            while (elapsed < duration)
-            {
-                await UniTask.Yield(PlayerLoopTiming.Update, cancellationToken);
-                elapsed += Time.unscaledDeltaTime;
-                float t = Mathf.Clamp01(elapsed / duration);
-                SetWaveFadeAlpha(Mathf.Lerp(fromAlpha, toAlpha, t));
-            }
+            _waveFadeMotionHandle = LMotion.Create(fromAlpha, toAlpha, duration)
+                .WithEase(_waveFadeEase)
+                .WithScheduler(MotionScheduler.UpdateIgnoreTimeScale)
+                .Bind(this, static (alpha, target) => target.SetWaveFadeAlpha(alpha));
 
-            SetWaveFadeAlpha(toAlpha);
+            try
+            {
+                await _waveFadeMotionHandle.ToUniTask(cancellationToken);
+            }
+            finally
+            {
+                CancelWaveFadeMotion();
+            }
+        }
+
+        private void CancelWaveFadeMotion()
+        {
+            if (_waveFadeMotionHandle.IsActive())
+            {
+                _waveFadeMotionHandle.Cancel();
+            }
         }
 
         /// <summary> 暗転オーバーレイが未設定の場合、Canvas先頭に全画面の黒Imageを自動生成する。 </summary>
