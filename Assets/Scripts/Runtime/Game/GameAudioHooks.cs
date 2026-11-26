@@ -23,6 +23,7 @@ namespace Taurus.Runtime.Game
 
         [Header("SE Clips（未設定時は無音）")]
         [SerializeField] private AudioClip _titlePressClip; // タイトルでSpaceを押した音
+        [SerializeField] private AudioClip _gameStartClip;  // ルール画面からゲームを開始した音
         [SerializeField] private AudioClip _countUpClip;    // ゲーム中に+1した音
         [SerializeField] private AudioClip _countDownClip;  // ゲーム中に-1した音
         [SerializeField] private AudioClip _parentTopClip;  // 親玉の真上通過チャイム
@@ -36,6 +37,8 @@ namespace Taurus.Runtime.Game
         [SerializeField] private AudioClip _resultBgmClip;  // リザルト画面BGM
 
         private GameController _subscribedController;
+        private bool _hasObservedPhase;
+        private GamePhase _lastPhase;
 
         private void OnEnable()
         {
@@ -53,6 +56,33 @@ namespace Taurus.Runtime.Game
             _gameController = gameController;
             _seSource = seSource;
             _bgmSource = bgmSource;
+        }
+
+        /// <summary> SE / BGM クリップを一括設定する（主にテスト・エディタ構築用）。 </summary>
+        public void ConfigureClips(
+            AudioClip titlePressClip,
+            AudioClip gameStartClip,
+            AudioClip countUpClip,
+            AudioClip countDownClip,
+            AudioClip parentTopClip,
+            AudioClip childTopClip,
+            AudioClip waveSuccessClip,
+            AudioClip gameOverClip,
+            AudioClip titleBgmClip,
+            AudioClip gameBgmClip,
+            AudioClip resultBgmClip)
+        {
+            _titlePressClip = titlePressClip;
+            _gameStartClip = gameStartClip;
+            _countUpClip = countUpClip;
+            _countDownClip = countDownClip;
+            _parentTopClip = parentTopClip;
+            _childTopClip = childTopClip;
+            _waveSuccessClip = waveSuccessClip;
+            _gameOverClip = gameOverClip;
+            _titleBgmClip = titleBgmClip;
+            _gameBgmClip = gameBgmClip;
+            _resultBgmClip = resultBgmClip;
         }
 
         private void ResolveAndBindGameController()
@@ -98,6 +128,11 @@ namespace Taurus.Runtime.Game
             _subscribedController.OnPendulumTopCrossed += HandlePendulumTopCrossed;
             _subscribedController.OnWaveSucceeded += HandleWaveSucceeded;
             _subscribedController.OnGameFinished += HandleGameFinished;
+
+            // 既に初期フェーズへ遷移済みの場合もBGMが鳴るように現在状態を同期する
+            _lastPhase = _subscribedController.CurrentPhase;
+            _hasObservedPhase = true;
+            ApplyBgmForPhase(_subscribedController.CurrentPhase);
         }
 
         private void UnbindGameController()
@@ -114,9 +149,29 @@ namespace Taurus.Runtime.Game
             _subscribedController.OnWaveSucceeded -= HandleWaveSucceeded;
             _subscribedController.OnGameFinished -= HandleGameFinished;
             _subscribedController = null;
+            _hasObservedPhase = false;
         }
 
         private void HandlePhaseChanged(GamePhase phase)
+        {
+            if (_hasObservedPhase)
+            {
+                if (_lastPhase == GamePhase.Rules && phase == GamePhase.Playing)
+                {
+                    PlaySe(_gameStartClip);
+                }
+                else if (_lastPhase == GamePhase.Result && phase == GamePhase.Title)
+                {
+                    PlaySe(_titlePressClip);
+                }
+            }
+
+            _lastPhase = phase;
+            _hasObservedPhase = true;
+            ApplyBgmForPhase(phase);
+        }
+
+        private void ApplyBgmForPhase(GamePhase phase)
         {
             switch (phase)
             {
@@ -125,6 +180,7 @@ namespace Taurus.Runtime.Game
                     PlayBgm(_titleBgmClip);
                     break;
                 case GamePhase.Playing:
+                case GamePhase.Success:
                     PlayBgm(_gameBgmClip);
                     break;
                 case GamePhase.Result:

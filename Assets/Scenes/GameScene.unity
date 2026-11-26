@@ -1022,7 +1022,7 @@ MonoBehaviour:
     m_Value: 0
   OutputChannel: 1
   StandbyUpdate: 2
-  m_StreamingVersion: 0
+  m_StreamingVersion: 20241001
   m_LegacyPriority: 0
   Target:
     TrackingTarget: {fileID: 0}
@@ -1213,7 +1213,7 @@ MonoBehaviour:
     m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 10
-    m_MaxSize: 40
+    m_MaxSize: 120
     m_Alignment: 4
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -2133,7 +2133,7 @@ MonoBehaviour:
     m_Value: 0
   OutputChannel: 1
   StandbyUpdate: 2
-  m_StreamingVersion: 0
+  m_StreamingVersion: 20241001
   m_LegacyPriority: 0
   Target:
     TrackingTarget: {fileID: 0}
@@ -2245,7 +2245,7 @@ MonoBehaviour:
     m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 10
-    m_MaxSize: 40
+    m_MaxSize: 42
     m_Alignment: 4
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -2345,9 +2345,9 @@ Camera:
     height: 1
   near clip plane: 0.2
   far clip plane: 80
-  field of view: 45
+  field of view: 46
   orthographic: 0
-  orthographic size: 5
+  orthographic size: 10
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
@@ -2371,8 +2371,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 985329506}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 2.65, z: -10.5}
+  m_LocalRotation: {x: 0.072303146, y: 0.106200166, z: -0.00774301, w: 0.99168235}
+  m_LocalPosition: {x: -2.6, y: 3.6, z: -12}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2918,7 +2918,7 @@ MonoBehaviour:
     m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 10
-    m_MaxSize: 40
+    m_MaxSize: 48
     m_Alignment: 5
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -3190,7 +3190,7 @@ MonoBehaviour:
     m_Value: 0
   OutputChannel: 1
   StandbyUpdate: 2
-  m_StreamingVersion: 0
+  m_StreamingVersion: 20241001
   m_LegacyPriority: 0
   Target:
     TrackingTarget: {fileID: 0}
@@ -3459,7 +3459,7 @@ MonoBehaviour:
     m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 10
-    m_MaxSize: 40
+    m_MaxSize: 42
     m_Alignment: 4
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -3839,6 +3839,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Taurus.Runtime.Stage.StageLoader
   _defaultStageSceneName: Stage_Default
+  _additionalSubSceneNames: []
 --- !u!114 &1437390485
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3854,16 +3855,19 @@ MonoBehaviour:
   _gameController: {fileID: 1437390483}
   _seSource: {fileID: 1437390487}
   _bgmSource: {fileID: 1437390486}
-  _titlePressClip: {fileID: 0}
-  _countUpClip: {fileID: 0}
-  _countDownClip: {fileID: 0}
-  _parentTopClip: {fileID: 0}
-  _childTopClip: {fileID: 0}
-  _waveSuccessClip: {fileID: 0}
-  _gameOverClip: {fileID: 0}
-  _titleBgmClip: {fileID: 0}
-  _gameBgmClip: {fileID: 0}
-  _resultBgmClip: {fileID: 0}
+  _seAudioGroup: 0
+  _bgmAudioGroup: 0
+  _titlePressClip: {fileID: 8300000, guid: a50452476baf1c746809db00c1c63b91, type: 3}
+  _gameStartClip: {fileID: 8300000, guid: cb5a48380a5d85d4d9dd7399f00b1434, type: 3}
+  _countUpClip: {fileID: 8300000, guid: 5406ae22198121a4d9a11c828e0c64d6, type: 3}
+  _countDownClip: {fileID: 8300000, guid: 58154137a445aaf4c8d46771c2b0d8e0, type: 3}
+  _parentTopClip: {fileID: 8300000, guid: ec7dc637acf735740ad8d15f456c1e6e, type: 3}
+  _childTopClip: {fileID: 8300000, guid: 1c1a0e20af62a1146937b94e2a22aa47, type: 3}
+  _waveSuccessClip: {fileID: 8300000, guid: ad915e4c4acabc445888bcb838d289ee, type: 3}
+  _gameOverClip: {fileID: 8300000, guid: 91ecb4919a48c4b4ab42cc7c3117d9ce, type: 3}
+  _titleBgmClip: {fileID: 8300000, guid: 2381d900e20ec3a42a0133a8562de97d, type: 3}
+  _gameBgmClip: {fileID: 8300000, guid: 44387851a1666c64da3acc254ac7b28b, type: 3}
+  _resultBgmClip: {fileID: 8300000, guid: 05756061177743d48b593afccd762b8d, type: 3}
 --- !u!82 &1437390486
 AudioSource:
   m_ObjectHideFlags: 0
@@ -3877,7 +3881,7 @@ AudioSource:
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
   m_PlayOnAwake: 0
-  m_Volume: 1
+  m_Volume: 0.55
   m_Pitch: 1
   Loop: 1
   Mute: 0
@@ -4322,7 +4326,7 @@ MonoBehaviour:
     m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 10
-    m_MaxSize: 40
+    m_MaxSize: 78
     m_Alignment: 4
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -4595,7 +4599,7 @@ MonoBehaviour:
     m_Value: 20
   OutputChannel: 1
   StandbyUpdate: 2
-  m_StreamingVersion: 0
+  m_StreamingVersion: 20241001
   m_LegacyPriority: 0
   Target:
     TrackingTarget: {fileID: 0}
@@ -5023,7 +5027,7 @@ MonoBehaviour:
     m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 10
-    m_MaxSize: 40
+    m_MaxSize: 42
     m_Alignment: 4
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -5247,7 +5251,7 @@ MonoBehaviour:
     m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 10
-    m_MaxSize: 40
+    m_MaxSize: 96
     m_Alignment: 4
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -5526,7 +5530,7 @@ MonoBehaviour:
     m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 10
-    m_MaxSize: 40
+    m_MaxSize: 76
     m_Alignment: 4
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -6439,7 +6443,7 @@ MonoBehaviour:
     m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 10
-    m_MaxSize: 40
+    m_MaxSize: 56
     m_Alignment: 4
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -6794,7 +6798,7 @@ MonoBehaviour:
     m_Value: 0
   OutputChannel: 1
   StandbyUpdate: 2
-  m_StreamingVersion: 0
+  m_StreamingVersion: 20241001
   m_LegacyPriority: 0
   Target:
     TrackingTarget: {fileID: 0}
