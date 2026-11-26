@@ -74,6 +74,9 @@ namespace Taurus.Runtime.Game
         private string _ownerSceneName;
         private bool _isDuplicateInstance;
 
+        // アウトゲーム画面が消えるのを待ってから Wave 1 を始めるまでの間 true（二重開始を防ぐ）
+        private bool _isStartingRun;
+
         // リザルト画面に入った時刻（Time.unscaledTime）。入力猶予の判定に使う
         private float _resultEnteredTime;
 
@@ -371,6 +374,11 @@ namespace Taurus.Runtime.Game
         /// <summary> リザルト画面から、ルール説明を挟まずに Wave 1 からやり直す。 </summary>
         private void RetryFromResult()
         {
+            if (_isStartingRun)
+            {
+                return;
+            }
+
             CancelPhaseTask();
             _expectedCount = 0;
             StartRunFromRules();
@@ -395,6 +403,11 @@ namespace Taurus.Runtime.Game
 
         private void StartRunFromRules()
         {
+            if (_isStartingRun)
+            {
+                return;
+            }
+
             StageAnchor anchor = ResolveStageAnchor();
             if (!_isStageReady && anchor == null)
             {
@@ -403,6 +416,34 @@ namespace Taurus.Runtime.Game
 
             _currentWave = 1;
             _runSeed = GenerateRunSeed();
+            StartFirstWaveAfterScreenExitAsync().Forget();
+        }
+
+        // ルール説明やリザルトの画面が消え終わってから Wave 1 を始める。
+        // 画面の消える演出とゲーム画面の出る演出が重なると見にくく、その間に振り子とタイマーが進むのも避けたいため
+        private async UniTaskVoid StartFirstWaveAfterScreenExitAsync()
+        {
+            CancelPhaseTask();
+            _phaseCts = CancellationTokenSource.CreateLinkedTokenSource(this.GetCancellationTokenOnDestroy());
+            CancellationToken token = _phaseCts.Token;
+            _isStartingRun = true;
+
+            try
+            {
+                if (ServiceLocator.TryGetInstance<Taurus.Runtime.UI.HUDController>(out Taurus.Runtime.UI.HUDController hud) && hud != null)
+                {
+                    await hud.PlayOutGameExitAsync(GamePhase.Playing, token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            finally
+            {
+                _isStartingRun = false;
+            }
+
             BeginWave();
         }
 
