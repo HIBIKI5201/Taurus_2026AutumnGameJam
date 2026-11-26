@@ -364,5 +364,30 @@ namespace Taurus.Editor.Tests
                 Assert.AreEqual(20, nonZeroCount, $"Wave {w} は全シードで 0 回にならないこと（最低1回保証）");
             }
         }
+
+        [Test]
+        public void DistinctInitialAngles_TwoPendulumsStartOppositeDirectionsAndSeparated()
+        {
+            WaveConfig wave4 = StageDefinition.CreateOptimal15Waves()[3];
+            for (uint i = 0; i < 50u; i++)
+            {
+                uint seed1 = unchecked(7000u + i * 2654435761u);
+                uint seed2 = unchecked(7000u + i * 2246822519u + 17u);
+
+                MotionSchedule first = MotionScheduleGenerator.Generate(seed1, wave4);
+                double firstAngle = first.Segments[0].StartAngle;
+                MotionSchedule second = MotionScheduleGenerator.Generate(seed2, wave4, new[] { firstAngle });
+                double secondAngle = second.Segments[0].StartAngle;
+
+                // 2本目の初動方向が1本目と逆になり、初期位置が十分離れていることを検証
+                if (Math.Abs(Math.Sin(firstAngle)) > 0.05)
+                {
+                    Assert.AreEqual(-first.Segments[0].Direction, second.Segments[0].Direction, $"trial={i}");
+                }
+
+                double diff = Math.Abs(((secondAngle - firstAngle + Math.PI) % (Math.PI * 2.0) + Math.PI * 2.0) % (Math.PI * 2.0) - Math.PI);
+                Assert.GreaterOrEqual(diff, 0.5, $"trial={i}, diff={diff}");
+            }
+        }
     }
 }

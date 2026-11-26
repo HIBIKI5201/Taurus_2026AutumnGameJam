@@ -399,6 +399,8 @@ namespace Taurus.Runtime.Game
             float now = Time.unscaledTime;
 
             int expectedTotal = 0;
+            // 複数振り子・多段玉の間で初期位置と初動方向が被ってシンクロしないよう既出初期角度を記録する
+            List<double> usedInitialAngles = new List<double>(6);
 
             for (int i = 0; i < totalCount; i++)
             {
@@ -429,23 +431,35 @@ namespace Taurus.Runtime.Game
                     }
                 }
 
-                // HTML参照実装と同系統のシード導出式：Wave番号と玉インデックスから素数オフセットで独立シードを作る
+                // 玉ごとに十分独立したシードを導出し、既出初期角度を避けて別々の動きをするように生成する
                 int ix = _currentWave * 17 + i * 3 + 1;
-                uint parentSeed = unchecked(_runSeed + (uint)(ix * 7919));
-                MotionSchedule parentSchedule = MotionScheduleGenerator.Generate(parentSeed, config);
+                uint parentSeed = unchecked(_runSeed ^ (uint)(ix * 2654435761u));
+                MotionSchedule parentSchedule = MotionScheduleGenerator.Generate(parentSeed, config, usedInitialAngles);
+                if (parentSchedule.Segments.Count > 0)
+                {
+                    usedInitialAngles.Add(parentSchedule.Segments[0].StartAngle);
+                }
 
                 MotionSchedule childSchedule = null;
                 if (isDouble || isTriple)
                 {
-                    uint childSeed = unchecked(_runSeed + (uint)((ix + 1) * 7919));
-                    childSchedule = MotionScheduleGenerator.Generate(childSeed, config);
+                    uint childSeed = unchecked(_runSeed ^ (uint)((ix + 1) * 2246822519u));
+                    childSchedule = MotionScheduleGenerator.Generate(childSeed, config, usedInitialAngles);
+                    if (childSchedule.Segments.Count > 0)
+                    {
+                        usedInitialAngles.Add(childSchedule.Segments[0].StartAngle);
+                    }
                 }
 
                 MotionSchedule grandchildSchedule = null;
                 if (isTriple)
                 {
-                    uint grandchildSeed = unchecked(_runSeed + (uint)((ix + 2) * 7919));
-                    grandchildSchedule = MotionScheduleGenerator.Generate(grandchildSeed, config);
+                    uint grandchildSeed = unchecked(_runSeed ^ (uint)((ix + 2) * 3266489917u));
+                    grandchildSchedule = MotionScheduleGenerator.Generate(grandchildSeed, config, usedInitialAngles);
+                    if (grandchildSchedule.Segments.Count > 0)
+                    {
+                        usedInitialAngles.Add(grandchildSchedule.Segments[0].StartAngle);
+                    }
                 }
 
                 instance.OnTopCrossed += HandlePendulumTopCrossed;

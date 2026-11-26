@@ -30,8 +30,9 @@ namespace Taurus.Runtime.Pendulum
         /// <summary>
         /// WaveConfig の分割区間・量制約 [Q_min, Q_max]・終了ルールに従い、
         /// 後ろ向きDP（w'_i = w_i * can_reach[t + t_i, q + q_i]）で制約を守りつつ決定論的スケジュールを生成する。
+        /// avoidInitialAngles を渡すと、既存の玉と初期位置・初動方向が被らないよう分散して生成する。
         /// </summary>
-        public static MotionSchedule Generate(uint seed, WaveConfig waveConfig)
+        public static MotionSchedule Generate(uint seed, WaveConfig waveConfig, IReadOnlyList<double> avoidInitialAngles = null)
         {
             if (waveConfig == null)
             {
@@ -83,6 +84,7 @@ namespace Taurus.Runtime.Pendulum
                     waveConfig.TimeQuantizationStep,
                     useWaveConstraint,
                     waveCanReach,
+                    avoidInitialAngles,
                     out MotionSchedule schedule))
                 {
                     return schedule;
@@ -123,12 +125,13 @@ namespace Taurus.Runtime.Pendulum
             float timeStepSeconds,
             bool useWaveConstraint,
             bool[,] waveCanReach,
+            IReadOnlyList<double> avoidInitialAngles,
             out MotionSchedule schedule)
         {
             uint state = seed;
             List<MotionSegment> segments = new List<MotionSegment>(16);
 
-            double rotation = SampleInitialRotation(ref state);
+            double rotation = SampleDistinctInitialRotation(ref state, avoidInitialAngles);
             int direction = DetermineGravityInitialDirection(rotation, ref state);
 
             double elapsedCursor = 0.0;
@@ -459,6 +462,70 @@ namespace Taurus.Runtime.Pendulum
             }
 
             return sinTheta > 0.0 ? -1 : 1;
+        }
+
+        /// <summary>
+        /// 既出の初期角度群（他振り子・親玉等）と初期位置・左右方向が被らないように複数候補から最も離れた角度を選ぶ。
+        /// 複数振り子時に同じ動きへシンクロするのを防ぐ。
+        /// </summary>
+        private static double SampleDistinctInitialRotation(ref uint state, IReadOnlyList<double> avoidAngles)
+        {
+            if (avoidAngles == null || avoidAngles.Count == 0)
+            {
+                return SampleInitialRotation(ref state);
+            }
+
+            const int CANDIDATE_COUNT = 16;
+            double lastAngle = avoidAngles[avoidAngles.Count - 1];
+            double lastSin = Math.Sin(lastAngle);
+            double lastCos = Math.Cos(lastAngle);
+
+            double bestAngle = SampleInitialRotation(ref state);
+            double bestScore = double.NegativeInfinity;
+
+            for (int c = 0; c < CANDIDATE_COUNT; c++)
+            {
+                double candidate = c == 0 ? bestAngle : SampleInitialRotation(ref state);
+                double candSin = Math.Sin(candidate);
+                double candCos = Math.Cos(candidate);
+
+                // 既出角度すべてとの最小円周距離
+                double minAngularDist = Math.PI;
+                for (int i = 0; i < avoidAngles.Count; i++)
+                {
+                    double diff = Math.Abs(WrapToPi(candidate - avoidAngles[i]));
+                    if (diff < minAngularDist)
+                    {
+                        minAngularDist = diff;
+                    }
+                }
+
+                // 直前の玉と左右反対側（初動方向が逆）であることを強く優先し、上下（cos符号）の違いも加点する
+                double oppositeSideBonus = (candSin * lastSin < -0.02) ? 2.5 : 0.0;
+                double oppositeHalfBonus = (candCos * lastCos < 0.0) ? 0.45 : 0.0;
+                // 真下・真上付近（sin≈0）を避けて左右差を明確にする
+                double sideClarity = Math.Abs(candSin) * 0.35;
+
+                double score = minAngularDist + oppositeSideBonus + oppositeHalfBonus + sideClarity;
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestAngle = candidate;
+                }
+            }
+
+            return bestAngle;
+        }
+
+        private static double WrapToPi(double angleRad)
+        {
+            double wrapped = (angleRad + Math.PI) % TWO_PI;
+            if (wrapped < 0.0)
+            {
+                wrapped += TWO_PI;
+            }
+
+            return wrapped - Math.PI;
         }
 
         private static double SampleInitialRotation(ref uint state)
