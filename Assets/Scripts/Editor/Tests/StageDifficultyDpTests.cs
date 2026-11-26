@@ -148,5 +148,107 @@ namespace Taurus.Editor.Tests
             Assert.Less(rSingle2.BlendedDifficultyScore, rDouble1.BlendedDifficultyScore);
             Assert.Less(rDouble1.BlendedDifficultyScore, rDouble2.BlendedDifficultyScore);
         }
+
+        [Test]
+        public void SplitPoints_AddMoveRemove_PreservesTotalPeriodContinuity()
+        {
+            WaveConfig wave = new WaveConfig(1, 0, new[]
+            {
+                new WeightedCountChoice(60, 0, 1f),
+                new WeightedCountChoice(40, 1, 1f),
+            });
+
+            // 初期 [0, 8] を中央で分割 → 2区間 [0, 4], [4, 8]
+            Assert.IsTrue(wave.SplitLongestInterval());
+            float[] splits = wave.GetSplitPoints();
+            Assert.AreEqual(1, splits.Length);
+            Assert.AreEqual(4f, splits[0], 1e-4f);
+
+            // 分割点 p_1 を 3.0s へ移動 → [0, 3], [3, 8]（合計 8s 維持）
+            Assert.IsTrue(wave.MoveSplitPoint(0, 3f));
+            splits = wave.GetSplitPoints();
+            Assert.AreEqual(3f, splits[0], 1e-4f);
+            Assert.AreEqual(8f, wave.EndTimeSeconds, 1e-4f);
+
+            // さらに最長区間 [3, 8] を分割 → 3区間、合計 8s 維持
+            Assert.IsTrue(wave.SplitLongestInterval());
+            Assert.AreEqual(2, wave.GetSplitPoints().Length);
+            Assert.AreEqual(8f, wave.EndTimeSeconds, 1e-4f);
+
+            // 分割点削除で 2 区間に戻り、合計 8s 維持
+            Assert.IsTrue(wave.RemoveSplitPoint(0));
+            Assert.AreEqual(1, wave.GetSplitPoints().Length);
+            Assert.AreEqual(8f, wave.EndTimeSeconds, 1e-4f);
+        }
+
+        [Test]
+        public void NestedConstraints_WaveAndIntervals_SatisfiedSimultaneouslyByBackwardDp()
+        {
+            // 前半4秒は区間制約 [1, 3]、後半4秒は区間制約 [2, 4]、さらにWave全体制約 [4, 5] を課す（入れ子区間制約）
+            WeightedCountChoice[] choices =
+            {
+                new WeightedCountChoice(50, 0, 1f),
+                new WeightedCountChoice(35, 1, 1f),
+                new WeightedCountChoice(15, 2, 1f),
+            };
+
+            WaveConfig nestedWave = new WaveConfig(1, 0, new[]
+            {
+                new StageIntervalConfig("前半", 4f, choices, useQuantityConstraint: true, minQuantity: 1, maxQuantity: 3),
+                new StageIntervalConfig("後半", 4f, choices, useQuantityConstraint: true, minQuantity: 2, maxQuantity: 4),
+            });
+            nestedWave.SetWaveQuantityConstraint(true, 4, 5);
+
+            WaveDifficultyReport report = StageDifficultyEvaluator.EvaluateWave(nestedWave);
+            Assert.IsTrue(report.AllConstraintsFeasible);
+            Assert.IsTrue(report.WaveConstraintFeasible);
+            Assert.Greater(report.WaveConstraintSatisfactionProbability, 0.0);
+
+            // 50シードすべてで前半 [1,3]、後半 [2,4]、かつ Wave合計 [4,5] を厳密に満たすことを検証
+            for (uint i = 0; i < 50u; i++)
+            {
+                MotionSchedule schedule = MotionScheduleGenerator.Generate(2000u + i * 7919u, nestedWave);
+                Assert.GreaterOrEqual(schedule.TotalExpectedTopCount, 4);
+                Assert.LessOrEqual(schedule.TotalExpectedTopCount, 5);
+
+                int firstHalfCount = 0;
+                int secondHalfCount = 0;
+                foreach (MotionSegment seg in schedule.Segments)
+                {
+                    if (seg.StartTime < 4.0 - 1e-6)
+                    {
+                        firstHalfCount += seg.ExpectedTopCount;
+                    }
+                    else
+                    {
+                        secondHalfCount += seg.ExpectedTopCount;
+                    }
+                }
+
+                Assert.GreaterOrEqual(firstHalfCount, 1);
+                Assert.LessOrEqual(firstHalfCount, 3);
+                Assert.GreaterOrEqual(secondHalfCount, 2);
+                Assert.LessOrEqual(secondHalfCount, 4);
+            }
+        }
+
+        [Test]
+        public void NestedConstraints_ContradictoryWaveConstraint_IsDetectedAsInfeasible()
+        {
+            // 各区間は [1, 2] で到達可能だが、合計は最大 4 なのに Wave全体で [6, 8] を要求 → 入れ子矛盾を検出
+            WeightedCountChoice[] choices = { new WeightedCountChoice(50, 0, 1f), new WeightedCountChoice(50, 1, 1f) };
+            WaveConfig wave = new WaveConfig(1, 0, new[]
+            {
+                new StageIntervalConfig("前半", 4f, choices, useQuantityConstraint: true, minQuantity: 1, maxQuantity: 2),
+                new StageIntervalConfig("後半", 4f, choices, useQuantityConstraint: true, minQuantity: 1, maxQuantity: 2),
+            });
+            wave.SetWaveQuantityConstraint(true, 6, 8);
+
+            WaveDifficultyReport report = StageDifficultyEvaluator.EvaluateWave(wave);
+            Assert.IsTrue(report.Intervals[0].HasValidPath);
+            Assert.IsTrue(report.Intervals[1].HasValidPath);
+            Assert.IsFalse(report.WaveConstraintFeasible);
+            Assert.IsFalse(report.AllConstraintsFeasible);
+        }
     }
 }

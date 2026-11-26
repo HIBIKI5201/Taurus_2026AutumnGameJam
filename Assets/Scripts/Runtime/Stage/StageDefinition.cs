@@ -131,6 +131,15 @@ namespace Taurus.Runtime.Stage
             return DEFAULT_WAVES[clampedIndex];
         }
 
+        /// <summary> _waves が未設定のときデフォルト定義をコピーして編集可能な状態にする。 </summary>
+        public void EnsureWavesEditable()
+        {
+            if (_waves == null || _waves.Length == 0)
+            {
+                ResetToDefaultWaves();
+            }
+        }
+
         /// <summary> デフォルトの Wave 1〜8 定義をディープコピーして設定する（エディタ初期化用）。 </summary>
         public void ResetToDefaultWaves()
         {

@@ -46,6 +46,44 @@ namespace Taurus.Runtime.Stage
         /// <summary> この区間の抽選候補一覧。 </summary>
         public IReadOnlyList<WeightedCountChoice> Choices => _choices;
 
+        /// <summary> 区間ラベルを更新する（エディタ編集用）。 </summary>
+        public void SetLabel(string label)
+        {
+            _label = string.IsNullOrWhiteSpace(label) ? "区間" : label;
+        }
+
+        /// <summary> 区間長 L_k（秒）を更新する（分割点操作用）。 </summary>
+        public void SetDurationSeconds(float durationSeconds)
+        {
+            _durationSeconds = Mathf.Max(0.1f, durationSeconds);
+        }
+
+        /// <summary> 量制約 [Q_min, Q_max] の設定を更新する。 </summary>
+        public void SetQuantityConstraint(bool useConstraint, int minQuantity, int maxQuantity)
+        {
+            _useQuantityConstraint = useConstraint;
+            _minQuantity = Mathf.Max(0, minQuantity);
+            _maxQuantity = Mathf.Max(_minQuantity, maxQuantity);
+        }
+
+        /// <summary> 抽選候補と制約設定を引き継いで新しい区間を複製する（分割点追加用）。 </summary>
+        public StageIntervalConfig Clone(string newLabel, float newDurationSeconds)
+        {
+            WeightedCountChoice[] choicesCopy = _choices != null ? new WeightedCountChoice[_choices.Length] : Array.Empty<WeightedCountChoice>();
+            if (_choices != null)
+            {
+                Array.Copy(_choices, choicesCopy, _choices.Length);
+            }
+
+            return new StageIntervalConfig(
+                newLabel,
+                Mathf.Max(0.1f, newDurationSeconds),
+                choicesCopy,
+                _useQuantityConstraint,
+                _minQuantity,
+                _maxQuantity);
+        }
+
         /// <summary> 区間設定を初期化する。 </summary>
         public StageIntervalConfig(
             string label,

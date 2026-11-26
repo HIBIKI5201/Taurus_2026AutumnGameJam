@@ -57,6 +57,21 @@ namespace Taurus.Runtime.Pendulum
                 cursor = dpResults[i].EndTime;
             }
 
+            // Wave全体（親区間）の入れ子制約用 後ろ向きDPテーブルを事前計算
+            bool useWaveConstraint = waveConfig.UseWaveQuantityConstraint;
+            bool[,] waveCanReach = null;
+            if (useWaveConstraint)
+            {
+                waveCanReach = StageDifficultyEvaluator.BuildWaveBackwardReachability(
+                    dpResults,
+                    waveConfig.WaveMinQuantity,
+                    waveConfig.WaveMaxQuantity);
+                if (waveCanReach.GetLength(0) == 0 || waveCanReach.GetLength(1) == 0 || !waveCanReach[0, 0])
+                {
+                    useWaveConstraint = false;
+                }
+            }
+
             for (int retry = 0; retry < MAX_RETRY_COUNT; retry++)
             {
                 uint attemptSeed = unchecked(seed + (uint)(retry * 2654435761u));
@@ -66,6 +81,8 @@ namespace Taurus.Runtime.Pendulum
                     dpResults,
                     waveConfig.StopRule,
                     waveConfig.TimeQuantizationStep,
+                    useWaveConstraint,
+                    waveCanReach,
                     out MotionSchedule schedule))
                 {
                     return schedule;
@@ -104,6 +121,8 @@ namespace Taurus.Runtime.Pendulum
             IntervalDpResult[] dpResults,
             DrawStopRule stopRule,
             float timeStepSeconds,
+            bool useWaveConstraint,
+            bool[,] waveCanReach,
             out MotionSchedule schedule)
         {
             uint state = seed;
@@ -115,6 +134,7 @@ namespace Taurus.Runtime.Pendulum
             double elapsedCursor = 0.0;
             int totalCount = 0;
             float stepSec = Mathf.Clamp(timeStepSeconds > 0f ? timeStepSeconds : 1.0f, 0.1f, 2.0f);
+            int waveMaxTrackedQ = waveCanReach != null ? waveCanReach.GetLength(1) - 1 : 0;
 
             for (int k = 0; k < intervals.Count; k++)
             {
@@ -126,10 +146,53 @@ namespace Taurus.Runtime.Pendulum
                     continue;
                 }
 
+                // 区間制約とWave全体制約の積集合に対する有効ゴール・到達可能性テーブルを構築
                 bool enforceConstraint = interval.UseQuantityConstraint && dp.HasValidPath;
+                bool[,] activeCanReach = dp.CanReachTable;
+                bool[] validGoalQ = null;
+                int maxT = dp.TimeSteps;
+                int maxAllowedQ = dp.MaxQuantity;
+
+                if (useWaveConstraint && waveCanReach != null)
+                {
+                    int remainingMaxQ = Math.Max(0, waveMaxTrackedQ - totalCount);
+                    int goalLen = Math.Min(dp.MaxTrackedQuantity, remainingMaxQ) + 1;
+                    bool[] nestedGoalQ = new bool[goalLen];
+                    bool anyValidGoal = false;
+
+                    for (int q = 0; q < goalLen; q++)
+                    {
+                        bool intervalOk = !interval.UseQuantityConstraint || (q >= interval.MinQuantity && q <= interval.MaxQuantity);
+                        bool waveOk = totalCount + q <= waveMaxTrackedQ && waveCanReach[k + 1, totalCount + q];
+                        if (intervalOk && waveOk)
+                        {
+                            nestedGoalQ[q] = true;
+                            anyValidGoal = true;
+                        }
+                    }
+
+                    if (anyValidGoal)
+                    {
+                        bool[,] nestedCanReach = StageDifficultyEvaluator.BuildIntervalReachabilityForGoals(
+                            interval,
+                            stopRule,
+                            stepSec,
+                            nestedGoalQ,
+                            out int nestedTimeSteps,
+                            out int nestedMaxQ);
+                        if (nestedCanReach[0, 0])
+                        {
+                            enforceConstraint = true;
+                            activeCanReach = nestedCanReach;
+                            validGoalQ = nestedGoalQ;
+                            maxT = nestedTimeSteps;
+                            maxAllowedQ = nestedMaxQ;
+                        }
+                    }
+                }
+
                 int currentT = 0;
                 int currentQ = 0;
-                int maxT = dp.TimeSteps;
 
                 while (currentT < maxT)
                 {
@@ -137,6 +200,9 @@ namespace Taurus.Runtime.Pendulum
                         ref state,
                         choices,
                         dp,
+                        activeCanReach,
+                        validGoalQ,
+                        maxAllowedQ,
                         currentT,
                         currentQ,
                         maxT,
@@ -206,6 +272,9 @@ namespace Taurus.Runtime.Pendulum
             ref uint state,
             IReadOnlyList<WeightedCountChoice> choices,
             IntervalDpResult dp,
+            bool[,] canReachTable,
+            bool[] validGoalQ,
+            int maxAllowedQ,
             int currentT,
             int currentQ,
             int maxT,
@@ -224,6 +293,8 @@ namespace Taurus.Runtime.Pendulum
             // 各候補の補正重みを計算
             double[] weights = new double[choices.Count];
             bool[] overflows = new bool[choices.Count];
+            int reachRows = canReachTable != null ? canReachTable.GetLength(0) : 0;
+            int reachCols = canReachTable != null ? canReachTable.GetLength(1) : 0;
 
             for (int i = 0; i < choices.Count; i++)
             {
@@ -255,13 +326,18 @@ namespace Taurus.Runtime.Pendulum
                     if (isOverflow)
                     {
                         // StopOnFirstOverflow で停止する場合、現在量 currentQ がゴール範囲内なら許可
-                        bool canStopHere = currentQ >= dp.MinQuantity && currentQ <= dp.MaxQuantity;
+                        bool canStopHere = validGoalQ != null
+                            ? (currentQ >= 0 && currentQ < validGoalQ.Length && validGoalQ[currentQ])
+                            : (currentQ >= dp.MinQuantity && currentQ <= dp.MaxQuantity);
                         adjustedWeight = canStopHere ? c.Weight : 0.0;
                     }
                     else
                     {
                         // w'_i = w_i * can_reach[t + t_i, q + q_i]
-                        bool reachable = nextQ <= dp.MaxQuantity && dp.CanReach(nextT, nextQ);
+                        bool reachable = nextQ <= maxAllowedQ
+                            && nextT >= 0 && nextT < reachRows
+                            && nextQ >= 0 && nextQ < reachCols
+                            && canReachTable[nextT, nextQ];
                         adjustedWeight = reachable ? c.Weight : 0.0;
                     }
                 }

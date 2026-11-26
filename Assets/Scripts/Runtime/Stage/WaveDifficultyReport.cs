@@ -42,8 +42,26 @@ namespace Taurus.Runtime.Stage
         /// <summary> 平均密度と L2 ピーク評価をブレンドし、玉数と構成負荷倍率を掛けた総合難易度スコア。 </summary>
         public double BlendedDifficultyScore { get; }
 
-        /// <summary> すべての区間で量制約 [Q_min, Q_max] が到達可能（実行可能）かどうか。 </summary>
+        /// <summary> すべての区間およびWave全体で量制約が到達可能（実行可能）かどうか。 </summary>
         public bool AllConstraintsFeasible { get; }
+
+        /// <summary> Wave全体（親区間）の量制約 [W_min, W_max] が有効かどうか。 </summary>
+        public bool UseWaveQuantityConstraint { get; }
+
+        /// <summary> Wave全体の最小値保証 W_min（1玉あたり）。 </summary>
+        public int WaveMinQuantity { get; }
+
+        /// <summary> Wave全体の最大値保証 W_max（1玉あたり）。 </summary>
+        public int WaveMaxQuantity { get; }
+
+        /// <summary> Wave全体の量制約 [W_min, W_max] が到達可能かどうか。 </summary>
+        public bool WaveConstraintFeasible { get; }
+
+        /// <summary> 前向きDP畳み込みによる Wave全体制約の厳密達成確率 P(W_min <= ΣQ_k <= W_max)。 </summary>
+        public double WaveConstraintSatisfactionProbability { get; }
+
+        /// <summary> Wave全体の合計量分布（1玉あたり、インデックス = 合計量 Q）。 </summary>
+        public IReadOnlyList<double> WaveTotalQuantityProbabilities { get; }
 
         /// <summary> 各分割区間のDP評価結果一覧。 </summary>
         public IReadOnlyList<IntervalDpResult> Intervals { get; }
@@ -64,7 +82,13 @@ namespace Taurus.Runtime.Stage
             double blendedDifficultyScore,
             bool allConstraintsFeasible,
             IntervalDpResult[] intervals,
-            Vector2[] curvePoints)
+            Vector2[] curvePoints,
+            bool useWaveQuantityConstraint = false,
+            int waveMinQuantity = 0,
+            int waveMaxQuantity = 0,
+            bool waveConstraintFeasible = true,
+            double waveConstraintSatisfactionProbability = 1.0,
+            double[] waveTotalQuantityProbabilities = null)
         {
             StartTime = startTime;
             EndTime = endTime;
@@ -79,6 +103,12 @@ namespace Taurus.Runtime.Stage
             AllConstraintsFeasible = allConstraintsFeasible;
             Intervals = intervals ?? Array.Empty<IntervalDpResult>();
             CurvePoints = curvePoints ?? Array.Empty<Vector2>();
+            UseWaveQuantityConstraint = useWaveQuantityConstraint;
+            WaveMinQuantity = waveMinQuantity;
+            WaveMaxQuantity = waveMaxQuantity;
+            WaveConstraintFeasible = waveConstraintFeasible;
+            WaveConstraintSatisfactionProbability = waveConstraintSatisfactionProbability;
+            WaveTotalQuantityProbabilities = waveTotalQuantityProbabilities ?? Array.Empty<double>();
         }
     }
 }
