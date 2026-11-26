@@ -30,6 +30,12 @@ namespace Taurus.Runtime.Game
         [SerializeField] private AudioClip _childTopClip;   // 子玉の真上通過チャイム
         [SerializeField] private AudioClip _waveSuccessClip;// Wave正解ジングル
         [SerializeField] private AudioClip _gameOverClip;   // 不一致・ゲームオーバージングル
+        [SerializeField] private AudioClip _waveStartClip;  // Wave開始ホイッスル
+        [SerializeField] private AudioClip _countFloorClip; // カウンター0で減算しようとした時のキャンセル音
+        [SerializeField] private AudioClip _recordHighClip; // トップ3入りした時の新記録ジングル
+
+        [Tooltip("ゲームオーバー音から新記録ジングルまでの間隔（秒）")]
+        [SerializeField] private float _recordHighDelaySeconds = 1.0f;
 
         [Header("BGM Clips（未設定時は無音）")]
         [SerializeField] private AudioClip _titleBgmClip;   // タイトル・ルール説明BGM
@@ -39,6 +45,8 @@ namespace Taurus.Runtime.Game
         private GameController _subscribedController;
         private bool _hasObservedPhase;
         private GamePhase _lastPhase;
+        // 減算時に「0のまま」だったかを判定するため、直前のカウントを覚えておく
+        private int _lastPlayerCount;
 
         private void OnEnable()
         {
@@ -85,6 +93,14 @@ namespace Taurus.Runtime.Game
             _resultBgmClip = resultBgmClip;
         }
 
+        /// <summary> 追加の SE クリップ（Wave開始・下限キャンセル・新記録）を設定する（主にテスト・エディタ構築用）。 </summary>
+        public void ConfigureExtraClips(AudioClip waveStartClip, AudioClip countFloorClip, AudioClip recordHighClip)
+        {
+            _waveStartClip = waveStartClip;
+            _countFloorClip = countFloorClip;
+            _recordHighClip = recordHighClip;
+        }
+
         private void ResolveAndBindGameController()
         {
             if (ServiceLocator.TryGetInstance<GameController>(out GameController located))
@@ -124,6 +140,7 @@ namespace Taurus.Runtime.Game
 
             _subscribedController.OnPhaseChanged += HandlePhaseChanged;
             _subscribedController.OnTitlePressChanged += HandleTitlePressChanged;
+            _subscribedController.OnWaveStarted += HandleWaveStarted;
             _subscribedController.OnPlayerCountChanged += HandlePlayerCountChanged;
             _subscribedController.OnPendulumTopCrossed += HandlePendulumTopCrossed;
             _subscribedController.OnWaveSucceeded += HandleWaveSucceeded;
@@ -144,6 +161,7 @@ namespace Taurus.Runtime.Game
 
             _subscribedController.OnPhaseChanged -= HandlePhaseChanged;
             _subscribedController.OnTitlePressChanged -= HandleTitlePressChanged;
+            _subscribedController.OnWaveStarted -= HandleWaveStarted;
             _subscribedController.OnPlayerCountChanged -= HandlePlayerCountChanged;
             _subscribedController.OnPendulumTopCrossed -= HandlePendulumTopCrossed;
             _subscribedController.OnWaveSucceeded -= HandleWaveSucceeded;
@@ -198,6 +216,11 @@ namespace Taurus.Runtime.Game
             }
         }
 
+        private void HandleWaveStarted(int wave)
+        {
+            PlaySe(_waveStartClip);
+        }
+
         private void HandlePlayerCountChanged(int currentCount, int delta)
         {
             if (delta > 0)
@@ -206,8 +229,12 @@ namespace Taurus.Runtime.Game
             }
             else if (delta < 0)
             {
-                PlaySe(_countDownClip);
+                // 0 のまま減算しようとした（下限で止まった）ときはキャンセル音、それ以外は通常の減算音
+                bool hitFloor = IsCountFloorHit(_lastPlayerCount, currentCount);
+                PlaySe(hitFloor && _countFloorClip != null ? _countFloorClip : _countDownClip);
             }
+
+            _lastPlayerCount = currentCount;
         }
 
         private void HandlePendulumTopCrossed(PendulumMotion pendulum, bool isChild, int crossedCount)
@@ -223,6 +250,43 @@ namespace Taurus.Runtime.Game
         private void HandleGameFinished(int clearedWaves, int expectedCount, int playerCount, IReadOnlyList<int> records)
         {
             PlaySe(_gameOverClip);
+
+            // 今回の記録がトップ3に入っていれば、ゲームオーバー音の後に新記録ジングルを鳴らす
+            if (IsTopRecord(clearedWaves, records))
+            {
+                CancelInvoke(nameof(PlayRecordHigh));
+                Invoke(nameof(PlayRecordHigh), Mathf.Max(0f, _recordHighDelaySeconds));
+            }
+        }
+
+        private void PlayRecordHigh()
+        {
+            PlaySe(_recordHighClip);
+        }
+
+        /// <summary> 減算の通知で、減算前も後も 0 だった（下限で止まった）かを返す。 </summary>
+        public static bool IsCountFloorHit(int previousCount, int currentCount)
+        {
+            return previousCount == 0 && currentCount == 0;
+        }
+
+        /// <summary> 今回の記録がトップ3の記録一覧に入っているかを返す。0 Wave（1つもクリアしていない）は記録扱いしない。 </summary>
+        public static bool IsTopRecord(int clearedWaves, IReadOnlyList<int> records)
+        {
+            if (clearedWaves <= 0 || records == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < records.Count; i++)
+            {
+                if (records[i] == clearedWaves)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void PlaySe(AudioClip clip)

@@ -14,17 +14,21 @@ namespace Taurus.Editor.Tests
     {
         private static readonly string[] REQUIRED_CLIP_PATHS =
         {
-            "Assets/AssetStoreTools/Audio/SE/SE_TitlePress.wav",
-            "Assets/AssetStoreTools/Audio/SE/SE_GameStart.wav",
-            "Assets/AssetStoreTools/Audio/SE/SE_CountUp.wav",
-            "Assets/AssetStoreTools/Audio/SE/SE_CountDown.wav",
-            "Assets/AssetStoreTools/Audio/SE/SE_ParentTop.wav",
-            "Assets/AssetStoreTools/Audio/SE/SE_ChildTop.wav",
-            "Assets/AssetStoreTools/Audio/SE/SE_WaveSuccess.wav",
-            "Assets/AssetStoreTools/Audio/SE/SE_GameOver.wav",
-            "Assets/AssetStoreTools/Audio/BGM/BGM_Title.wav",
-            "Assets/AssetStoreTools/Audio/BGM/BGM_Game.wav",
-            "Assets/AssetStoreTools/Audio/BGM/BGM_Result.wav",
+            "Assets/AssetStoreTools/Audio/SE/SE_Title_SpaceGauge.mp3",
+            "Assets/AssetStoreTools/Audio/SE/SE_UI_Click.mp3",
+            "Assets/AssetStoreTools/Audio/SE/SE_Count_Up.mp3",
+            "Assets/AssetStoreTools/Audio/SE/SE_Count_Down.mp3",
+            "Assets/AssetStoreTools/Audio/SE/SE_Count_Floor.mp3",
+            "Assets/AssetStoreTools/Audio/SE/SE_TopPass_Parent.mp3",
+            "Assets/AssetStoreTools/Audio/SE/SE_TopPass_Child.mp3",
+            "Assets/AssetStoreTools/Audio/SE/SE_Wave_Start.mp3",
+            "Assets/AssetStoreTools/Audio/SE/SE_Wave_Success.mp3",
+            "Assets/AssetStoreTools/Audio/SE/SE_Game_Over.mp3",
+            "Assets/AssetStoreTools/Audio/SE/SE_Record_High.mp3",
+            "Assets/AssetStoreTools/Audio/BGM/BGM_Title.mp3",
+            "Assets/AssetStoreTools/Audio/BGM/BGM_Wave_Main.mp3",
+            "Assets/AssetStoreTools/Audio/BGM/BGM_Result.mp3",
+            "Assets/AssetStoreTools/Audio/BGM/BGM_Result_Alt.mp3",
         };
 
         [Test]
@@ -89,6 +93,9 @@ namespace Taurus.Editor.Tests
                     "_childTopClip",
                     "_waveSuccessClip",
                     "_gameOverClip",
+                    "_waveStartClip",
+                    "_countFloorClip",
+                    "_recordHighClip",
                     "_titleBgmClip",
                     "_gameBgmClip",
                     "_resultBgmClip",
@@ -108,6 +115,22 @@ namespace Taurus.Editor.Tests
                     EditorSceneManager.CloseScene(gameScene, true);
                 }
             }
+        }
+
+        [TestCase(0, 0, true, TestName = "0で減算しても0のまま＝下限キャンセル")]
+        [TestCase(1, 0, false, TestName = "1から0への減算＝通常の減算")]
+        [TestCase(3, 2, false, TestName = "3から2への減算＝通常の減算")]
+        public void IsCountFloorHit_DetectsOnlyDecrementAtZero(int previous, int current, bool expected)
+        {
+            Assert.AreEqual(expected, GameAudioHooks.IsCountFloorHit(previous, current));
+        }
+
+        [TestCase(5, new[] { 7, 5, 2 }, true, TestName = "トップ3に入った記録＝新記録")]
+        [TestCase(1, new[] { 7, 5, 2 }, false, TestName = "トップ3に入らない記録＝新記録ではない")]
+        [TestCase(0, new[] { 0, 0, 0 }, false, TestName = "0Waveは新記録扱いしない")]
+        public void IsTopRecord_TrueOnlyWhenClearedWavesIsInRecords(int clearedWaves, int[] records, bool expected)
+        {
+            Assert.AreEqual(expected, GameAudioHooks.IsTopRecord(clearedWaves, records));
         }
     }
 }
