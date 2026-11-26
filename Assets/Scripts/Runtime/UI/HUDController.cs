@@ -22,7 +22,7 @@ namespace Taurus.Runtime.UI
     /// </summary>
     public class HUDController : MonoBehaviour
     {
-        // カウント操作フィードバック（「カウントを記録した」等）の自動非表示までの秒数
+        // フィードバック文言（正解表示など）の自動非表示までの秒数
         private const float FEEDBACK_DISPLAY_DURATION = 2f;
 
         [SerializeField] private GameController _gameController;
@@ -38,6 +38,7 @@ namespace Taurus.Runtime.UI
         [SerializeField] private Text _startCountText;
         [SerializeField] private Image _startMeterFill; // Image.Type = Filled（Horizontal）を想定
         [SerializeField] private Button _titleStartButton;
+        [SerializeField] private Button _quitButton;
 
         [Header("Rules UI")]
         [SerializeField] private Button _rulesStartButton;
@@ -70,6 +71,8 @@ namespace Taurus.Runtime.UI
         private float _feedbackHideTimer;
         private MotionHandle _waveFadeMotionHandle;
         private MotionHandle _popMotionHandle;
+        private CounterButtonPressEffect _plusPressEffect;
+        private CounterButtonPressEffect _minusPressEffect;
 
         /// <summary> Wave切替時の暗転時間（秒）。Inspectorから変更可能。 </summary>
         public float WaveFadeDurationSeconds => Mathf.Max(0f, _waveFadeDurationSeconds);
@@ -171,11 +174,18 @@ namespace Taurus.Runtime.UI
             if (_plusButton != null)
             {
                 _plusButton.onClick.AddListener(HandlePlusButtonClicked);
+                _plusPressEffect = _plusButton.GetComponent<CounterButtonPressEffect>();
             }
 
             if (_minusButton != null)
             {
                 _minusButton.onClick.AddListener(HandleMinusButtonClicked);
+                _minusPressEffect = _minusButton.GetComponent<CounterButtonPressEffect>();
+            }
+
+            if (_quitButton != null)
+            {
+                _quitButton.onClick.AddListener(HandleQuitClicked);
             }
 
             if (_retryButton != null)
@@ -340,10 +350,14 @@ namespace Taurus.Runtime.UI
                 _counterText.text = currentCount.ToString("00");
             }
 
-            if (_feedbackText != null && delta != 0)
+            // キー入力・ボタンクリックのどちらでも、押されたボタンを光らせる（下限0でCtrlを押したときも押した感触は返す）
+            if (delta > 0 && _plusPressEffect != null)
             {
-                _feedbackText.text = delta > 0 ? "カウントを記録した" : "ひとつ戻した";
-                _feedbackHideTimer = FEEDBACK_DISPLAY_DURATION;
+                _plusPressEffect.Play();
+            }
+            else if (delta < 0 && _minusPressEffect != null)
+            {
+                _minusPressEffect.Play();
             }
         }
 
@@ -608,6 +622,15 @@ namespace Taurus.Runtime.UI
         private void HandleMinusButtonClicked()
         {
             ActiveController?.HandleCtrlInput();
+        }
+
+        private void HandleQuitClicked()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
         }
 
         private void HandleRetryClicked()
