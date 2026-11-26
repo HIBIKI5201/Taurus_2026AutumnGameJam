@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 52672e6ad8d4d3448889b876d98a4c58, type: 3}
+  m_Name: UISkin_WIP
+  m_EditorClassIdentifier: Assembly-CSharp::Taurus.Runtime.UI.UISkin
+  _entries:
+  - _slot: 10
+    _sprite: {fileID: 8144661843146654139, guid: fbdb577cc5b7727e832564a856fb8270, type: 3}
+  - _slot: 11
+    _sprite: {fileID: -2937945194236543249, guid: d31c247adcd5418754e7b4a45c34f549, type: 3}
+  - _slot: 12
+    _sprite: {fileID: -1946158105289524409, guid: 98f56cd243f009e9af9b45cff10519cd, type: 3}
+  - _slot: 20
+    _sprite: {fileID: 6160528817434426528, guid: 6883971f98c4a8c6582f9be009dc5b83, type: 3}
+  - _slot: 21
+    _sprite: {fileID: 6795077884157259837, guid: 34ace121dca666804556ce3d7a724495, type: 3}
+  - _slot: 22
+    _sprite: {fileID: 351194232857865650, guid: 54e43974bfb9d730b00ac5b5cdeabc7c, type: 3}
+  - _slot: 23
+    _sprite: {fileID: 8131871394276593939, guid: a38c7e47a5819fda24cbdd1ce780920d, type: 3}
+  - _slot: 24
+    _sprite: {fileID: 5535720674364486075, guid: 3c0bfbc419bd36e46191f7a877b58c22, type: 3}
+  - _slot: 25
+    _sprite: {fileID: -178198677696845237, guid: a8daccc112454c0e7a735a2cad5e18a7, type: 3}
+  - _slot: 26
+    _sprite: {fileID: -2025433324986521983, guid: a4ed95d0f6fb6a4db23d6595ef9429a6, type: 3}
+  - _slot: 27
+    _sprite: {fileID: -558511937442039806, guid: 4ce4da995492426aea544f10debb03f9, type: 3}
+  - _slot: 30
+    _sprite: {fileID: 4129766356537927628, guid: e177b1cbaba5cb9ebb1554ebd203edce, type: 3}
