@@ -86,8 +86,9 @@ else {
 
 # --- git の設定 ------------------------------------------------------------
 # submodule.recurse: pull や checkout のときにサブモジュールも追従させる。
+# fetch.recurseSubmodules: pull / fetch 時にサブモジュールの新コミットも自動取得する。
 # core.longpaths: Windows で 260 文字を超えるパスを扱えるようにする。
-$gitSettings = [ordered]@{ 'submodule.recurse' = 'true'; 'core.longpaths' = 'true' }
+$gitSettings = [ordered]@{ 'submodule.recurse' = 'true'; 'fetch.recurseSubmodules' = 'on-demand'; 'core.longpaths' = 'true' }
 foreach ($key in $gitSettings.Keys) {
     $expected = $gitSettings[$key]
     $current = (Invoke-Git @('config', '--local', '--get', $key)).Output
