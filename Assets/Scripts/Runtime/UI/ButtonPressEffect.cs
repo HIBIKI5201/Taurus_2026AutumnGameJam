@@ -1,22 +1,27 @@
 using LitMotion;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace Taurus.Runtime.UI
 {
     /// <summary>
-    ///     カウンターボタン（+1 / -1）の押下演出。
-    ///     ボタンを一瞬沈ませて弾ませ、ボタン画像の形に沿って光る板（Taurus/UI/PressGlow シェーダー）を重ねる。
+    ///     ボタンの押下演出。
+    ///     マウスを乗せると少し大きくなり、押している間は沈んだまま止まり、離した瞬間（Play）に弾んで
+    ///     ボタン画像の形に沿って光る板（Taurus/UI/PressGlow シェーダー）を重ねる。
     ///     キー入力・クリックのどちらでも HUDController から Play が呼ばれる。
     /// </summary>
     [RequireComponent(typeof(RectTransform))]
-    public class CounterButtonPressEffect : MonoBehaviour
+    public class ButtonPressEffect : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerEnterHandler, IPointerExitHandler
     {
         private static readonly int SOURCE_TEX_ID = Shader.PropertyToID("_SourceTex");
         private static readonly int SOURCE_UV_RECT_ID = Shader.PropertyToID("_SourceUVRect");
         private static readonly int PADDING_ID = Shader.PropertyToID("_Padding");
         private static readonly int GLOW_COLOR_ID = Shader.PropertyToID("_GlowColor");
         private static readonly int PROGRESS_ID = Shader.PropertyToID("_Progress");
+
+        // 押す・乗せるで大きさが変わるまでの時間（秒）
+        private const float STATE_SCALE_DURATION = 0.08f;
 
         // 光らせる形の元になるボタン画像（未設定なら同じ GameObject の Image）
         [SerializeField] private Image _sourceImage;
@@ -31,38 +36,87 @@ namespace Taurus.Runtime.UI
 
         [SerializeField, Min(0.05f)] private float _glowDuration = 0.55f;
 
-        // 押した瞬間に沈む大きさ（1 = 変化なし）
+        // 押している間の大きさ（1 = 変化なし）
         [SerializeField, Range(0.5f, 1f)] private float _pressedScale = 0.86f;
+
+        // マウスを乗せている間の大きさ（1 = 変化なし）
+        [SerializeField, Range(1f, 1.3f)] private float _hoverScale = 1.05f;
 
         [SerializeField, Min(0.05f)] private float _bounceDuration = 0.35f;
 
         private RectTransform _glowRect;
         private Material _glowInstance;
         private Vector3 _baseScale = Vector3.one;
+        private float _currentScale = 1f;
+        private bool _isPointerOver;
+        private bool _isPointerDown;
         private MotionHandle _glowHandle;
         private MotionHandle _scaleHandle;
 
-        /// <summary> 押下演出を最初から再生する。連打したときは前の演出を打ち切って再生し直す。 </summary>
+        /// <summary> 離した瞬間の演出（沈んだ状態から弾み、光る）を最初から再生する。連打したときは前の演出を打ち切る。 </summary>
         public void Play()
         {
+            CancelScaleMotion();
+            float from = Mathf.Min(_currentScale, _pressedScale);
+            _scaleHandle = LMotion.Create(from, GetRestingScale(), _bounceDuration)
+                .WithEase(Ease.OutBack)
+                .WithScheduler(MotionScheduler.UpdateIgnoreTimeScale)
+                .Bind(this, static (value, self) => self.SetScale(value));
+
             if (!EnsureGlowOverlay())
             {
                 return;
             }
 
             UpdateSourceParameters();
-            CancelMotions();
+            if (_glowHandle.IsActive())
+            {
+                _glowHandle.Cancel();
+            }
 
             _glowRect.gameObject.SetActive(true);
             _glowHandle = LMotion.Create(0f, 1f, _glowDuration)
                 .WithEase(Ease.OutCubic)
+                .WithScheduler(MotionScheduler.UpdateIgnoreTimeScale)
                 .WithOnComplete(() => _glowRect.gameObject.SetActive(false))
                 .Bind(this, static (value, self) => self._glowInstance.SetFloat(PROGRESS_ID, value));
+        }
 
-            transform.localScale = _baseScale * _pressedScale;
-            _scaleHandle = LMotion.Create(_pressedScale, 1f, _bounceDuration)
-                .WithEase(Ease.OutBack)
-                .Bind(this, static (value, self) => self.transform.localScale = self._baseScale * value);
+        /// <summary> マウスで押し込んだ。離すまで沈んだまま止める。 </summary>
+        public void OnPointerDown(PointerEventData eventData)
+        {
+            if (eventData.button != PointerEventData.InputButton.Left)
+            {
+                return;
+            }
+
+            _isPointerDown = true;
+            AnimateToScale(_pressedScale);
+        }
+
+        /// <summary> 離した。ボタンの上で離したときの弾む演出は、クリック処理から Play が呼ばれて始まる。 </summary>
+        public void OnPointerUp(PointerEventData eventData)
+        {
+            _isPointerDown = false;
+            if (!_isPointerOver)
+            {
+                AnimateToScale(GetRestingScale());
+            }
+        }
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            _isPointerOver = true;
+            if (!_isPointerDown)
+            {
+                AnimateToScale(GetRestingScale());
+            }
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            _isPointerOver = false;
+            AnimateToScale(_isPointerDown ? _pressedScale : GetRestingScale());
         }
 
         private void Awake()
@@ -77,8 +131,15 @@ namespace Taurus.Runtime.UI
 
         private void OnDisable()
         {
-            CancelMotions();
-            transform.localScale = _baseScale;
+            CancelScaleMotion();
+            if (_glowHandle.IsActive())
+            {
+                _glowHandle.Cancel();
+            }
+
+            _isPointerOver = false;
+            _isPointerDown = false;
+            SetScale(1f);
             if (_glowRect != null)
             {
                 _glowRect.gameObject.SetActive(false);
@@ -93,13 +154,28 @@ namespace Taurus.Runtime.UI
             }
         }
 
-        private void CancelMotions()
+        private float GetRestingScale()
         {
-            if (_glowHandle.IsActive())
-            {
-                _glowHandle.Cancel();
-            }
+            return _isPointerOver ? _hoverScale : 1f;
+        }
 
+        private void SetScale(float scale)
+        {
+            _currentScale = scale;
+            transform.localScale = _baseScale * scale;
+        }
+
+        private void AnimateToScale(float target)
+        {
+            CancelScaleMotion();
+            _scaleHandle = LMotion.Create(_currentScale, target, STATE_SCALE_DURATION)
+                .WithEase(Ease.OutQuad)
+                .WithScheduler(MotionScheduler.UpdateIgnoreTimeScale)
+                .Bind(this, static (value, self) => self.SetScale(value));
+        }
+
+        private void CancelScaleMotion()
+        {
             if (_scaleHandle.IsActive())
             {
                 _scaleHandle.Cancel();
@@ -116,7 +192,7 @@ namespace Taurus.Runtime.UI
 
             if (_glowMaterial == null || _sourceImage == null)
             {
-                Debug.LogWarning($"[{nameof(CounterButtonPressEffect)}] 発光マテリアルかボタン画像が未設定です。", this);
+                Debug.LogWarning($"[{nameof(ButtonPressEffect)}] 発光マテリアルかボタン画像が未設定です。", this);
                 return false;
             }
 

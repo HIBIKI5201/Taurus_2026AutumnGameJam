@@ -22,6 +22,15 @@ namespace Taurus.Runtime.UI
     /// </summary>
     public class HUDController : MonoBehaviour
     {
+        // アウトゲーム画面を離れるとき、ボタンの演出を見せるために画面を残しておく秒数
+        private const float PANEL_EXIT_HOLD_SECONDS = 0.18f;
+
+        // 残した画面を消すフェードの秒数
+        private const float PANEL_EXIT_FADE_SECONDS = 0.22f;
+
+        // 終了ボタンを押してから実際に終了するまでの秒数（演出を見せるため）
+        private const float QUIT_DELAY_SECONDS = 0.35f;
+
         // フィードバック文言（正解表示など）の自動非表示までの秒数
         private const float FEEDBACK_DISPLAY_DURATION = 2f;
 
@@ -73,8 +82,11 @@ namespace Taurus.Runtime.UI
         private float _feedbackHideTimer;
         private MotionHandle _waveFadeMotionHandle;
         private MotionHandle _popMotionHandle;
-        private CounterButtonPressEffect _plusPressEffect;
-        private CounterButtonPressEffect _minusPressEffect;
+        private ButtonPressEffect _plusPressEffect;
+        private ButtonPressEffect _minusPressEffect;
+        private readonly Dictionary<GameObject, MotionHandle> _panelExitHandles = new Dictionary<GameObject, MotionHandle>();
+        private GamePhase? _lastPhase;
+        private bool _isQuitting;
 
         /// <summary> Wave切替時の暗転時間（秒）。Inspectorから変更可能。 </summary>
         public float WaveFadeDurationSeconds => Mathf.Max(0f, _waveFadeDurationSeconds);
@@ -110,6 +122,7 @@ namespace Taurus.Runtime.UI
         {
             CancelWaveFadeMotion();
             CancelPopMotion();
+            CancelPanelExits();
             UnbindGameController();
             ServiceLocator.UnregisterInstance(this);
         }
@@ -176,13 +189,13 @@ namespace Taurus.Runtime.UI
             if (_plusButton != null)
             {
                 _plusButton.onClick.AddListener(HandlePlusButtonClicked);
-                _plusPressEffect = _plusButton.GetComponent<CounterButtonPressEffect>();
+                _plusPressEffect = _plusButton.GetComponent<ButtonPressEffect>();
             }
 
             if (_minusButton != null)
             {
                 _minusButton.onClick.AddListener(HandleMinusButtonClicked);
-                _minusPressEffect = _minusButton.GetComponent<CounterButtonPressEffect>();
+                _minusPressEffect = _minusButton.GetComponent<ButtonPressEffect>();
             }
 
             if (_quitButton != null)
@@ -284,13 +297,120 @@ namespace Taurus.Runtime.UI
 
         private void HandlePhaseChanged(GamePhase phase)
         {
-            if (_titlePanel != null) _titlePanel.SetActive(phase == GamePhase.Title);
-            if (_rulesPanel != null) _rulesPanel.SetActive(phase == GamePhase.Rules);
+            GamePhase? previous = _lastPhase;
+            _lastPhase = phase;
+
+            ShowPanel(_titlePanel, phase == GamePhase.Title);
+            ShowPanel(_rulesPanel, phase == GamePhase.Rules);
 
             // Success 表示中はゲーム画面を表示したまま成功バナーを重ねて表示する
             if (_gamePanel != null) _gamePanel.SetActive(phase == GamePhase.Playing || phase == GamePhase.Success);
-            if (_resultPanel != null) _resultPanel.SetActive(phase == GamePhase.Result);
+            ShowPanel(_resultPanel, phase == GamePhase.Result);
             if (_successBanner != null) _successBanner.SetActive(phase == GamePhase.Success);
+
+            // キー入力でもクリックでも、画面を進めたボタンを離した演出を見せてから、前の画面を消す
+            if (previous.HasValue && previous.Value != phase)
+            {
+                ButtonPressEffect leavingButton = GetLeavingButtonEffect(previous.Value, phase);
+                GameObject leavingPanel = GetOutGamePanel(previous.Value);
+                if (leavingButton != null && leavingPanel != null)
+                {
+                    PlayPanelExit(leavingPanel);
+                    leavingButton.Play();
+                }
+            }
+        }
+
+        private void ShowPanel(GameObject panel, bool isVisible)
+        {
+            if (panel == null)
+            {
+                return;
+            }
+
+            CancelPanelExit(panel);
+            panel.SetActive(isVisible);
+        }
+
+        private GameObject GetOutGamePanel(GamePhase phase)
+        {
+            switch (phase)
+            {
+                case GamePhase.Title: return _titlePanel;
+                case GamePhase.Rules: return _rulesPanel;
+                case GamePhase.Result: return _resultPanel;
+                default: return null;
+            }
+        }
+
+        // 画面の切り替わり方から、押されたボタンを決める
+        private ButtonPressEffect GetLeavingButtonEffect(GamePhase from, GamePhase to)
+        {
+            Button button = null;
+            if (from == GamePhase.Title && to == GamePhase.Rules) button = _titleStartButton;
+            else if (from == GamePhase.Rules && to == GamePhase.Playing) button = _rulesStartButton;
+            else if (from == GamePhase.Result && to == GamePhase.Playing) button = _retryButton;
+            else if (from == GamePhase.Result && to == GamePhase.Title) button = _homeButton;
+
+            return button != null ? button.GetComponent<ButtonPressEffect>() : null;
+        }
+
+        // 前の画面を少し残してからフェードで消す。その間はクリックを受け付けない
+        private void PlayPanelExit(GameObject panel)
+        {
+            CanvasGroup group = panel.GetComponent<CanvasGroup>();
+            if (group == null)
+            {
+                group = panel.AddComponent<CanvasGroup>();
+            }
+
+            panel.SetActive(true);
+            group.alpha = 1f;
+            group.blocksRaycasts = false;
+            _panelExitHandles[panel] = LMotion.Create(1f, 0f, PANEL_EXIT_FADE_SECONDS)
+                .WithDelay(PANEL_EXIT_HOLD_SECONDS)
+                .WithEase(Ease.InQuad)
+                .WithScheduler(MotionScheduler.UpdateIgnoreTimeScale)
+                .WithOnComplete(() =>
+                {
+                    _panelExitHandles.Remove(panel);
+                    ResetPanelGroup(panel);
+                    panel.SetActive(false);
+                })
+                .Bind(group, static (alpha, g) => g.alpha = alpha);
+        }
+
+        private void CancelPanelExit(GameObject panel)
+        {
+            if (_panelExitHandles.TryGetValue(panel, out MotionHandle handle))
+            {
+                _panelExitHandles.Remove(panel);
+                if (handle.IsActive())
+                {
+                    handle.Cancel();
+                }
+            }
+
+            ResetPanelGroup(panel);
+        }
+
+        private void CancelPanelExits()
+        {
+            foreach (GameObject panel in new List<GameObject>(_panelExitHandles.Keys))
+            {
+                CancelPanelExit(panel);
+                panel.SetActive(_lastPhase.HasValue && GetOutGamePanel(_lastPhase.Value) == panel);
+            }
+        }
+
+        private static void ResetPanelGroup(GameObject panel)
+        {
+            CanvasGroup group = panel.GetComponent<CanvasGroup>();
+            if (group != null)
+            {
+                group.alpha = 1f;
+                group.blocksRaycasts = true;
+            }
         }
 
         private void HandleTitlePressChanged(int current, int required)
@@ -620,6 +740,33 @@ namespace Taurus.Runtime.UI
 
         private void HandleQuitClicked()
         {
+            if (_isQuitting)
+            {
+                return;
+            }
+
+            _isQuitting = true;
+            ButtonPressEffect effect = _quitButton.GetComponent<ButtonPressEffect>();
+            if (effect != null)
+            {
+                effect.Play();
+            }
+
+            QuitAfterEffectAsync(this.GetCancellationTokenOnDestroy()).Forget();
+        }
+
+        // 離した演出を見せてから終了する
+        private async UniTaskVoid QuitAfterEffectAsync(CancellationToken token)
+        {
+            try
+            {
+                await UniTask.Delay(TimeSpan.FromSeconds(QUIT_DELAY_SECONDS), ignoreTimeScale: true, cancellationToken: token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
 #else
