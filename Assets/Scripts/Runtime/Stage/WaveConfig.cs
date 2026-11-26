@@ -346,6 +346,52 @@ namespace Taurus.Runtime.Stage
             _waveMaxQuantity = Mathf.Max(_waveMinQuantity, maxQuantity);
         }
 
+        /// <summary> 現在の WaveConfig を全区間・抽選候補・制約ごとディープコピーする。 </summary>
+        public WaveConfig Clone()
+        {
+            StageIntervalConfig[] intervalsCopy = null;
+            if (_intervals != null && _intervals.Length > 0)
+            {
+                intervalsCopy = new StageIntervalConfig[_intervals.Length];
+                for (int i = 0; i < _intervals.Length; i++)
+                {
+                    intervalsCopy[i] = _intervals[i] != null
+                        ? _intervals[i].Clone(_intervals[i].Label, _intervals[i].DurationSeconds)
+                        : null;
+                }
+            }
+
+            WaveConfig copy;
+            if (intervalsCopy != null && intervalsCopy.Length > 0)
+            {
+                copy = new WaveConfig(
+                    _singlePendulumCount,
+                    _doublePendulumCount,
+                    intervalsCopy,
+                    _stopRule,
+                    TimeQuantizationStep,
+                    StartTimeSeconds,
+                    _triplePendulumCount);
+            }
+            else
+            {
+                WeightedCountChoice[] choicesCopy = _choices != null ? new WeightedCountChoice[_choices.Length] : Array.Empty<WeightedCountChoice>();
+                if (_choices != null)
+                {
+                    Array.Copy(_choices, choicesCopy, _choices.Length);
+                }
+
+                copy = new WaveConfig(_singlePendulumCount, _doublePendulumCount, choicesCopy);
+                copy._triplePendulumCount = _triplePendulumCount;
+                copy._stopRule = _stopRule;
+                copy._timeQuantizationStep = TimeQuantizationStep;
+                copy.SetPeriod(StartTimeSeconds, EndTimeSeconds);
+            }
+
+            copy.SetWaveQuantityConstraint(_useWaveQuantityConstraint, _waveMinQuantity, _waveMaxQuantity);
+            return copy;
+        }
+
         /// <summary> 選択Waveを「前半（導入）＋後半（山場）」の2区間に分割するプリセットを適用する。 </summary>
         public void ApplyDefaultTwoIntervalSplit()
         {
