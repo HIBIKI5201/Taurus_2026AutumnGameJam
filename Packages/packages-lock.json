@@ -367,7 +367,7 @@
       "url": "https://packages.unity.com"
     },
     "symphonyframework": {
-      "version": "https://github.com/HIBIKI5201/SymphonyFramework.git",
+      "version": "https://github.com/HIBIKI5201/SymphonyFramework.git#b88b339e45e9bf70492987297fe88df302468886",
       "depth": 0,
       "source": "git",
       "dependencies": {

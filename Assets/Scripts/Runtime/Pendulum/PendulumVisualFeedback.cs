@@ -17,16 +17,11 @@ namespace Taurus.Runtime.Pendulum
         // 仕様書第9章準拠：真上通過時の発光持続時間（秒）
         private const float FLASH_DURATION = 0.48f;
         private const float PEAK_SCALE_MULTIPLIER = 1.45f;
-        private const float EMISSION_INTENSITY = 2.4f;
+        private const float EMISSION_INTENSITY = 3.2f; // 視認性向上のため強め
 
         private static readonly int BASE_COLOR_ID = Shader.PropertyToID("_BaseColor");
         private static readonly int COLOR_ID = Shader.PropertyToID("_Color");
         private static readonly int EMISSION_COLOR_ID = Shader.PropertyToID("_EmissionColor");
-
-        private static readonly Color PARENT_BASE_COLOR = new Color(0.22f, 0.34f, 0.31f, 1f);
-        private static readonly Color PARENT_FLASH_COLOR = new Color(0.835f, 1.0f, 0.345f, 1f); // #d5ff58（ライム）
-        private static readonly Color CHILD_BASE_COLOR = new Color(0.36f, 0.27f, 0.24f, 1f);
-        private static readonly Color CHILD_FLASH_COLOR = new Color(1.0f, 0.451f, 0.357f, 1f);  // #ff735b（コーラル）
 
         [Header("Parent Bob（親玉）")]
         [SerializeField] private Transform _parentBob;
@@ -115,8 +110,8 @@ namespace Taurus.Runtime.Pendulum
                     _parentBobRenderer,
                     _parentPropBlock,
                     _parentBaseScale,
-                    PARENT_BASE_COLOR,
-                    PARENT_FLASH_COLOR,
+                    PendulumFlashPalette.ParentBaseColor,
+                    PendulumFlashPalette.ParentFlashColor,
                     _parentFlashTimer / FLASH_DURATION);
             }
 
@@ -129,8 +124,8 @@ namespace Taurus.Runtime.Pendulum
                     _childBobRenderer,
                     _childPropBlock,
                     _childBaseScale,
-                    CHILD_BASE_COLOR,
-                    CHILD_FLASH_COLOR,
+                    PendulumFlashPalette.ChildBaseColor,
+                    PendulumFlashPalette.ChildFlashColor,
                     _childFlashTimer / FLASH_DURATION);
             }
         }
@@ -146,8 +141,8 @@ namespace Taurus.Runtime.Pendulum
                     _childBobRenderer,
                     _childPropBlock,
                     _childBaseScale,
-                    CHILD_BASE_COLOR,
-                    CHILD_FLASH_COLOR,
+                    PendulumFlashPalette.ChildBaseColor,
+                    PendulumFlashPalette.ChildFlashColor,
                     1f);
             }
             else
@@ -159,8 +154,8 @@ namespace Taurus.Runtime.Pendulum
                     _parentBobRenderer,
                     _parentPropBlock,
                     _parentBaseScale,
-                    PARENT_BASE_COLOR,
-                    PARENT_FLASH_COLOR,
+                    PendulumFlashPalette.ParentBaseColor,
+                    PendulumFlashPalette.ParentFlashColor,
                     1f);
             }
         }

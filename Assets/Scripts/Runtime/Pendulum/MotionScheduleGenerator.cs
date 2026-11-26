@@ -22,6 +22,9 @@ namespace Taurus.Runtime.Pendulum
         // 終点高さの上限 sin(√3) ≈ 0.987（真上 h=1 の少し手前で折り返す）
         private static readonly double MAX_TURN_HEIGHT = Math.Sin(Math.Sqrt(3.0));
 
+        // Wave開始時の初期角度のsinθ上限：sin(π/√3) ≈ 0.971（水平付近の極端な初期姿勢を避ける）
+        private static readonly double INITIAL_SIN_LIMIT = Math.Sin(Math.PI / Math.Sqrt(3.0));
+
         /// <summary>
         /// 指定シードと区間重み候補から決定論的スケジュールを生成する。
         /// 同じシード・同じ重みを渡せば必ず同一の軌道が再現される。
@@ -55,11 +58,12 @@ namespace Taurus.Runtime.Pendulum
             // 最初の進行方向はランダム（+1 または -1）、以降は毎区間必ず反転させる
             int direction = NextRandom01(ref state) < 0.5 ? 1 : -1;
 
-            // 開始位置は支点より上側（h = sin(alpha) > 0）からスタートし、真下を通って反対側へ振り切る
-            double alpha = NextTurnAlpha(ref state);
-            double rotation = direction > 0
-                ? Math.PI * 1.5 - alpha
-                : Math.PI * 0.5 + alpha;
+            // Wave開始時の理不尽回避：sin(π/√3) > sinθ > sin(-π/√3) の範囲でsinθをランダムに決め、
+            // cosθの符号（支点より下半分/上半分）も独立にランダムに選ぶ
+            double initialSin = (NextRandom01(ref state) * 2.0 - 1.0) * INITIAL_SIN_LIMIT;
+            double initialBaseAngle = Math.Asin(initialSin); // cosθ > 0（支点より下半分）側の principal 値
+            bool startsAboveHorizontal = NextRandom01(ref state) < 0.5; // true: cosθ < 0（上半分）を選ぶ
+            double rotation = startsAboveHorizontal ? Math.PI - initialBaseAngle : initialBaseAngle;
 
             int totalCount = 0;
 
@@ -69,7 +73,7 @@ namespace Taurus.Runtime.Pendulum
                 int durationInt = Math.Max(1, (int)Math.Round(choice.DurationSeconds));
 
                 // 次区間の終端高さと位相を決定（進行方向に応じて支点より上側の反対側位相を選ぶ）
-                alpha = NextTurnAlpha(ref state);
+                double alpha = NextTurnAlpha(ref state);
                 double endPhase = direction > 0
                     ? Math.PI * 0.5 + alpha
                     : Math.PI * 1.5 - alpha;

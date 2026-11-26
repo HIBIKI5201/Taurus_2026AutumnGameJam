@@ -1,0 +1,17 @@
+using UnityEngine;
+
+namespace Taurus.Runtime.Pendulum
+{
+    /// <summary>
+    /// 真上通過時の発光色を RulesPanel デモ（RuleDemoAnimator）と本番振り子（PendulumVisualFeedback）で
+    /// 一元管理するための共有パレット。片方だけ色を直して食い違う事故を防ぐ。
+    /// 視認性改善のため、発光色は彩度・輝度を高めに設定している。
+    /// </summary>
+    public static class PendulumFlashPalette
+    {
+        public static readonly Color ParentBaseColor = new Color(0.22f, 0.34f, 0.31f, 1f);
+        public static readonly Color ParentFlashColor = new Color(0.90f, 1.0f, 0.10f, 1f); // 高彩度ライム
+        public static readonly Color ChildBaseColor = new Color(0.36f, 0.27f, 0.24f, 1f);
+        public static readonly Color ChildFlashColor = new Color(1.0f, 0.22f, 0.05f, 1f); // 高彩度オレンジ
+    }
+}
