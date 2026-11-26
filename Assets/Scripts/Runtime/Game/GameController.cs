@@ -407,7 +407,7 @@ namespace Taurus.Runtime.Game
                 }
 
                 Transform pivot = anchor != null ? anchor.GetPivot(i, totalCount) : parentRoot;
-                PendulumMotion instance = Instantiate(prefab, pivot.position, Quaternion.identity, parentRoot);
+                PendulumMotion instance = Instantiate(prefab, pivot.position, Quaternion.LookRotation(Vector3.back, Vector3.up), parentRoot);
                 instance.name = isDouble ? $"PendulumDouble_{i + 1:00}" : $"PendulumSingle_{i + 1:00}";
 
                 // HTML参照実装と同じシード導出式：Wave番号と玉インデックスから素数オフセットで独立シードを作る
