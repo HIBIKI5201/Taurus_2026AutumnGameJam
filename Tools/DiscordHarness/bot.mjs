@@ -14,8 +14,9 @@
  * 4. Antigravity が利用制限（レート制限・クォータ超過）に掛かった場合、または未設定の場合は、
  *    Claude Code CLI（`claude -p`）へ同じ依頼を引き継いで処理する（Antigravity 優先・Claude 予備）。
  *    利用制限を検知したら DISCORD_AGY_COOLDOWN_MS の間は Antigravity を飛ばして Claude を直接使う。
- * 5. 依頼の処理が終わるたびに、リポジトリを main ブランチへ戻して origin から早送りで最新化する
- *    （他の依頼が実行中なら最後の 1 件が終わるまで待つ。失敗したら Discord に警告を出す）。
+ * 5. 同じマシン・リポジトリを共用するため、依頼は 1 件ずつ順番に処理する（処理中に来た依頼は待機させる）。
+ * 6. 依頼の処理が終わるたびに、リポジトリを main ブランチへ戻して origin から早送りで最新化してから次の依頼に移る
+ *    （失敗したら Discord に警告を出す）。
  *
  * 【起動方法】
  *   node Tools/DiscordHarness/bot.mjs
@@ -69,6 +70,8 @@ const REPLY_TIMEOUT_MS = Number(process.env.DISCORD_REPLY_TIMEOUT_MS || 1_800_00
 // 作業が終わるたびにリポジトリを main ブランチへ戻すか（デフォルト true）と、戻す先のブランチ名
 const RETURN_TO_MAIN = (process.env.DISCORD_RETURN_TO_MAIN ?? "true").toLowerCase() !== "false";
 const MAIN_BRANCH = (process.env.DISCORD_MAIN_BRANCH || "main").trim();
+// Antigravity がタイムアウトした後、裏で続く実行が止まるのを待つ上限（デフォルト 30 分）。この間は次の依頼を始めない
+const AGY_DRAIN_MS = Number(process.env.DISCORD_AGY_DRAIN_MS || 1_800_000);
 // RUN_STATE_IDLE を連続何回確認したら完了とみなすか（一時的なIDLE揺らぎでの誤終了防止）
 const IDLE_CONFIRM_POLLS = 2;
 
@@ -728,13 +731,34 @@ async function runAntigravityPrompt(promptText, meta) {
   }
 
   console.warn(`[DiscordHarness] タイムアウト: ${conversationId}`);
+  // Antigravity には会話を止める API が無く、タイムアウト後も裏で作業（ブランチ操作を含む）が続く。
+  // 次のジョブと衝突しないよう、実行が止まるまで（上限 AGY_DRAIN_MS）このジョブを終わらせない。
+  const drained = await waitForAgyIdle(conversationId, AGY_DRAIN_MS);
   const partialReply = extractLastAssistantReply(conversationId);
+  const tail = drained
+    ? "（その後 Antigravity の実行は止まりました）"
+    : "（さらに待ちましたが Antigravity はまだ実行中です。次の依頼と衝突する可能性があります）";
   return {
     conversationId,
     reply: partialReply
-      ? `処理がタイムアウトしました（直近の進捗）:\n${partialReply.slice(0, 1500)}\n（会話ID: \`${conversationId}\`）`
-      : `タイムアウトしました（現在もバックグラウンド実行中の可能性があります / 会話ID: \`${conversationId}\`）。`,
+      ? `処理がタイムアウトしました${tail}（直近の進捗）:\n${partialReply.slice(0, 1500)}\n（会話ID: \`${conversationId}\`）`
+      : `タイムアウトしました${tail}（会話ID: \`${conversationId}\`）。`,
   };
+}
+
+/** Antigravity の会話が RUNNING でなくなるまで待つ。止まれば true、上限まで待っても動いていれば false。 */
+async function waitForAgyIdle(conversationId, maxMs) {
+  const deadline = Date.now() + maxMs;
+  while (Date.now() < deadline) {
+    try {
+      const info = await callConversationService("GetConversation", { conversationId });
+      if (info?.conversation?.state?.runState !== "RUN_STATE_RUNNING") return true;
+    } catch {
+      // 一時エラーは無視して待ち続ける
+    }
+    await sleep(10_000);
+  }
+  return false;
 }
 
 /**
@@ -863,7 +887,8 @@ async function handleMessageCreate(msg) {
       `- Antigravity API: ${isAntigravityAvailable() ? (isAgyCoolingDown() ? "利用制限中（Claude へ迂回）" : "接続可能") : "未設定"}`,
       `- Antigravity 残り利用枠: ${quotaText}`,
       `- Claude 予備: ${CLAUDE_ENABLED ? `有効（\`${CLAUDE_BIN}\` / ${CLAUDE_PERMISSION_MODE}${CLAUDE_MODEL ? ` / ${CLAUDE_MODEL}` : ""}）` : "無効"}`,
-      `- 実行中タスク数: ${activeJobs}`,
+      `- 実行中タスク数: ${activeJobs}（1 件ずつ順番に処理）`,
+      `- 待機中タスク数: ${pendingJobs.length}`,
       `- Antigravity モデル: \`${AGY_MODEL}\``,
       `- 履歴取得件数: 直近 ${HISTORY_LIMIT} 件（スレッド開始・返信元メッセージ対応）`,
     ].join("\n");
@@ -871,11 +896,43 @@ async function handleMessageCreate(msg) {
     return;
   }
 
-  // エージェントへジョブ投入（Antigravity 優先、利用制限時は Claude）
-  activeJobs++;
+  // エージェントへジョブ投入（Antigravity 優先、利用制限時は Claude）。
+  // 同じマシン・同じリポジトリを共用しているため、ブランチ移動が衝突しないよう 1 件ずつ順番に処理する。
   const authorName = msg.author?.global_name || msg.author?.username || "unknown";
   console.log(`[DiscordHarness] 受信 (${authorName}): ${prompt.slice(0, 80)}`);
 
+  const ahead = pendingJobs.length + activeJobs;
+  if (ahead > 0) {
+    await sendDiscordMessage(
+      msg.channel_id,
+      `受け付けました。前の作業が終わるまで待機します（先に ${ahead} 件あります）。順番が来たら着手します。`,
+      msg.id
+    ).catch(() => {});
+  }
+
+  await enqueueJob({ label: `${authorName}: ${prompt.slice(0, 40)}`, run: () => runJob(msg, prompt, referencedMessage, authorName) });
+}
+
+// ---------- 直列ジョブキュー ----------
+// 待機中のジョブ（先頭から順に実行）。実行中のジョブは含まない。
+const pendingJobs = [];
+let jobChain = Promise.resolve();
+
+/** ジョブをキューの末尾に足し、自分の番が来て終わるまで待つ。前のジョブが失敗しても後続は実行する。 */
+function enqueueJob(job) {
+  pendingJobs.push(job);
+  const run = jobChain.then(async () => {
+    pendingJobs.splice(pendingJobs.indexOf(job), 1);
+    console.log(`[DiscordHarness] ジョブ開始: ${job.label}（待機 ${pendingJobs.length} 件）`);
+    await job.run();
+  });
+  jobChain = run.catch((err) => console.error("[DiscordHarness] ジョブ異常終了:", err));
+  return jobChain;
+}
+
+/** 1 件分の依頼を処理し、終わったら main へ戻す。キューから 1 件ずつ呼ばれる。 */
+async function runJob(msg, prompt, referencedMessage, authorName) {
+  activeJobs++;
   const typingTimer = setInterval(() => triggerTyping(msg.channel_id), 8000);
   try {
     await triggerTyping(msg.channel_id);
@@ -913,14 +970,10 @@ async function handleMessageCreate(msg) {
     ).catch(() => {});
   } finally {
     clearInterval(typingTimer);
-    activeJobs--;
 
-    // 作業が終わったらリポジトリを main へ戻す。
-    // 他の依頼が実行中のときは、その作業ブランチを奪わないよう最後の 1 件が終わるまで待つ。
-    if (RETURN_TO_MAIN) {
-      if (activeJobs > 0) {
-        console.log(`[DiscordHarness] 他に実行中の依頼が ${activeJobs} 件あるため、${MAIN_BRANCH} への切り替えは後回しにします`);
-      } else {
+    // 作業が終わったらリポジトリを main へ戻す。ジョブは直列なので、次のジョブはこの後に始まる。
+    try {
+      if (RETURN_TO_MAIN) {
         const result = await returnToMainBranch();
         if (!result.ok) {
           await sendDiscordMessage(
@@ -930,6 +983,9 @@ async function handleMessageCreate(msg) {
           ).catch(() => {});
         }
       }
+    } finally {
+      // main 復帰が終わるまでは「実行中」として数える（その間に来た依頼にも待機の案内を出すため）
+      activeJobs--;
     }
   }
 }
