@@ -358,9 +358,13 @@ namespace Taurus.Runtime.Game
             BeginWave();
         }
 
-        private void BeginWave()
+        private void BeginWave(bool cancelPhaseTask = true)
         {
-            CancelPhaseTask();
+            if (cancelPhaseTask)
+            {
+                CancelPhaseTask();
+            }
+
             _playerCount = 0;
             _waveElapsedSeconds = 0f;
             _waveRemainingSeconds = WAVE_DURATION_SECONDS;
@@ -488,7 +492,24 @@ namespace Taurus.Runtime.Game
 
             if (_currentPhase == GamePhase.Success)
             {
-                BeginWave();
+                // HUDController がある場合は UI を隠さない暗転を挟み、暗転ピークで次Waveへ切り替える
+                if (ServiceLocator.TryGetInstance<Taurus.Runtime.UI.HUDController>(out Taurus.Runtime.UI.HUDController hud) &&
+                    hud != null &&
+                    hud.WaveFadeDurationSeconds > 0f)
+                {
+                    try
+                    {
+                        await hud.PlayWaveTransitionFadeAsync(() => BeginWave(cancelPhaseTask: false), token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
+                }
+                else
+                {
+                    BeginWave();
+                }
             }
         }
 
