@@ -54,6 +54,8 @@ namespace Taurus.Runtime.UI
         [Header("Result UI")]
         [SerializeField] private Text _clearedWavesText;
         [SerializeField] private Text _resultDetailText;
+        // クリアWave数の数字の色（デザイン案ではクリーム地の枠に水色の数字）
+        [SerializeField] private Color _clearedWavesColor = new Color(0.29f, 0.63f, 0.76f, 1f);
         [SerializeField] private Text[] _recordValueTexts; // 要素0=1ST, 1=2ND, 2=3RD
         [SerializeField] private Button _retryButton;
         [SerializeField] private Button _homeButton;
@@ -386,19 +388,19 @@ namespace Taurus.Runtime.UI
         private void HandleGameFinished(int clearedWaves, int expectedCount, int playerCount, IReadOnlyList<int> records)
         {
             bool isNewTopRecord = GameAudioHooks.IsTopRecord(clearedWaves, records);
-            string rankLabel = FormatResultRankLabel(clearedWaves, isNewTopRecord);
-            Color rankColor = GetResultRankColor(clearedWaves);
 
             if (_clearedWavesText != null)
             {
-                _clearedWavesText.text = clearedWaves.ToString();
-                _clearedWavesText.color = rankColor;
+                _clearedWavesText.text = clearedWaves.ToString("00");
+                _clearedWavesText.color = _clearedWavesColor;
                 PlayScalePop(_clearedWavesText.transform, isNewTopRecord ? 0.75f : 0.88f, 0.35f);
             }
 
             if (_resultDetailText != null)
             {
-                _resultDetailText.text = $"{rankLabel}\nYOUR COUNT: {playerCount:00}  /  ANSWER: {expectedCount:00}";
+                // デザイン案どおり、失敗したWaveと「自分のカウント/正解」だけを出す
+                int failedWave = clearedWaves + 1;
+                _resultDetailText.text = $"WAVE{failedWave}\n{playerCount}/{expectedCount}";
             }
 
             if (_recordValueTexts != null)
@@ -444,14 +446,6 @@ namespace Taurus.Runtime.UI
             }
 
             return isNewRecord ? $"★ NEW RECORD ★  {rank}" : rank;
-        }
-
-        private static Color GetResultRankColor(int clearedWaves)
-        {
-            if (clearedWaves >= 15) return new Color(1.0f, 0.85f, 0.20f, 1f); // ゴールド
-            if (clearedWaves >= 10) return new Color(0.84f, 1.0f, 0.35f, 1f); // ライム
-            if (clearedWaves >= 4) return new Color(0.35f, 0.90f, 1.0f, 1f);  // シアン
-            return Color.white;
         }
 
         private void PlayScalePop(Transform target, float startScale, float duration)

@@ -10,6 +10,7 @@ namespace Taurus.Runtime.UI
         TitleLogo = 10,
         StartButton = 11,
         RulesIllustration = 12,
+        RulesCard = 13,
 
         // インゲームHUD
         HudTopFrame = 20,
@@ -23,5 +24,9 @@ namespace Taurus.Runtime.UI
 
         // リザルト
         GameOverHeading = 30,
+        ResultClearedFrame = 31,
+        ResultRecordsFrame = 32,
+        RetryIcon = 33,
+        ReturnToTitleIcon = 34,
     }
 }

@@ -37,3 +37,13 @@ MonoBehaviour:
     _sprite: {fileID: -558511937442039806, guid: 4ce4da995492426aea544f10debb03f9, type: 3}
   - _slot: 30
     _sprite: {fileID: 4129766356537927628, guid: e177b1cbaba5cb9ebb1554ebd203edce, type: 3}
+  - _slot: 13
+    _sprite: {fileID: 21300000, guid: 65d1af645ea09894f9e095e29af01c87, type: 3}
+  - _slot: 31
+    _sprite: {fileID: 8131871394276593939, guid: a38c7e47a5819fda24cbdd1ce780920d, type: 3}
+  - _slot: 32
+    _sprite: {fileID: 21300000, guid: 5323b550373621e41804125d187bf13b, type: 3}
+  - _slot: 33
+    _sprite: {fileID: 21300000, guid: 757db87fea4d22d4f8db15088eead80c, type: 3}
+  - _slot: 34
+    _sprite: {fileID: 21300000, guid: 7daab3ee1ab4665438759bc0038c5b72, type: 3}
