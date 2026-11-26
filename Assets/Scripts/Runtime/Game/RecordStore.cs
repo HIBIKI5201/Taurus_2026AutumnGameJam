@@ -1,13 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
+using Cysharp.Threading.Tasks;
+using SymphonyFrameWork.Exceptions;
+using SymphonyFrameWork.System.SaveSystem;
 using UnityEngine;
 
 namespace Taurus.Runtime.Game
 {
     /// <summary>
-    /// クリアWave数のトップ3を端末ローカル（PlayerPrefs）へ永続化するストア。
-    /// HTML参照版の localStorage キー（pendulum-count-records）と同名のキーを使用する。
+    /// クリアWave数のトップ3を SymphonyFramework の SaveStore（未初期化時は PlayerPrefs）へ永続化するストア。
+    /// HTML参照版の localStorage キー（pendulum-count-records）からのデータ引き継ぎにも対応する。
     ///
     /// 【保存ルール】
     /// - クリア数 0 以下のランは記録に追加しない。
@@ -26,6 +30,61 @@ namespace Taurus.Runtime.Game
 
         /// <summary> 現在のトップ3記録（降順、最大3件）。不足分はUI側で「—」を表示する。 </summary>
         public IReadOnlyList<int> Records => _records;
+
+        /// <summary> SaveStore から記録を非同期で読み込む。未初期化・失敗時は PlayerPrefs へ安全にフォールバックする。 </summary>
+        public async UniTask<IReadOnlyList<int>> LoadAsync(CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                PendulumRecordsSaveData saveData = await SaveStore.LoadAsync<PendulumRecordsSaveData>(cancellationToken);
+                List<int> normalized = NormalizeRecords(saveData.Records);
+
+                // 旧 PlayerPrefs 形式の既存記録があり SaveStore 側がまだ空なら初回移行する
+                if (normalized.Count == 0 && PlayerPrefs.HasKey(PREFS_KEY))
+                {
+                    List<int> legacy = ParseRecords(PlayerPrefs.GetString(PREFS_KEY, string.Empty));
+                    if (legacy.Count > 0)
+                    {
+                        normalized = legacy;
+                        saveData.SetRecords(normalized);
+                        await SaveStore.SaveAsync<PendulumRecordsSaveData>(cancellationToken);
+                    }
+                }
+
+                _records.Clear();
+                _records.AddRange(normalized);
+                return _records;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (SymphonyNotInitializedException)
+            {
+                return Load();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[{nameof(RecordStore)}] SaveStore からの読み込みに失敗したため PlayerPrefs へフォールバックします: {ex.Message}");
+                return Load();
+            }
+        }
+
+        /// <summary> メモリ上の記録を即時更新し、SaveStore へ非同期保存する。0以下は無視する。 </summary>
+        public IReadOnlyList<int> RecordScoreAndSave(int clearedWaves, CancellationToken cancellationToken = default)
+        {
+            if (clearedWaves <= 0)
+            {
+                return _records;
+            }
+
+            List<int> merged = MergeRecords(_records, clearedWaves);
+            _records.Clear();
+            _records.AddRange(merged);
+
+            SaveToStoreAsync(cancellationToken).Forget();
+            return _records;
+        }
 
         /// <summary> PlayerPrefsから記録を読み込む。破損時は空リストへ安全にフォールバックする。 </summary>
         public IReadOnlyList<int> Load()
@@ -58,6 +117,37 @@ namespace Taurus.Runtime.Game
             string serialized = SerializeRecords(_records);
             PlayerPrefs.SetString(PREFS_KEY, serialized);
             PlayerPrefs.Save();
+        }
+
+        private async UniTaskVoid SaveToStoreAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                PendulumRecordsSaveData saveData = SaveStore.IsLoaded<PendulumRecordsSaveData>()
+                    ? SaveStore.Get<PendulumRecordsSaveData>()
+                    : await SaveStore.LoadAsync<PendulumRecordsSaveData>(cancellationToken);
+
+                saveData.SetRecords(_records);
+                await SaveStore.SaveAsync<PendulumRecordsSaveData>(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // 破棄時のキャンセルは正常終了として扱う
+            }
+            catch (SymphonyNotInitializedException)
+            {
+                Save();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[{nameof(RecordStore)}] SaveStore への保存に失敗したため PlayerPrefs へフォールバックします: {ex.Message}");
+                Save();
+            }
+        }
+
+        private static List<int> NormalizeRecords(IReadOnlyList<int> source)
+        {
+            return MergeRecords(source, 0);
         }
 
         /// <summary> 既存記録に新しいスコアを統合し、重複排除・降順上位3件を返す純粋関数（単体テスト対象）。 </summary>

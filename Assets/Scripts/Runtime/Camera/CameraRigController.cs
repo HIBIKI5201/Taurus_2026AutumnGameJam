@@ -1,3 +1,4 @@
+using SymphonyFrameWork.System.ServiceLocate;
 using Taurus.Runtime.Game;
 using Unity.Cinemachine;
 using UnityEngine;
@@ -7,7 +8,7 @@ namespace Taurus.Runtime.Camera
     /// <summary>
     /// Cinemachine 3（CinemachineCamera）の優先度を切り替えて、
     /// ゲーム状態（Title / Rules / Playing(1本・2本) / Result）に応じたカメラワークを制御する。
-    /// GameScene の CameraRig オブジェクトにアタッチして使用する。
+    /// GameScene の CameraRig オブジェクトにアタッチし、ServiceLocator 経由で GameController と連携する。
     ///
     /// 【引き継ぎ・調整ポイント】
     /// - 各カメラの構図や画角を変えたい場合は、GameScene 内の CM_〇〇 オブジェクトの Transform と Lens.FieldOfView を直接編集する。
@@ -27,29 +28,18 @@ namespace Taurus.Runtime.Camera
         [SerializeField] private CinemachineCamera _gameDualCamera;
         [SerializeField] private CinemachineCamera _resultCamera;
 
+        private GameController _subscribedController;
+
         private void OnEnable()
         {
-            if (_gameController == null)
-            {
-                return;
-            }
-
-            _gameController.OnPhaseChanged += HandlePhaseChanged;
-            _gameController.OnWaveStarted += HandleWaveStarted;
-
-            // 有効化時点の状態に合わせて初期カメラを反映
-            ApplyCameraForCurrentState();
+            ServiceLocator.RegisterInstance(this, LocateTypeEnum.Locator);
+            ResolveAndBindGameController();
         }
 
         private void OnDisable()
         {
-            if (_gameController == null)
-            {
-                return;
-            }
-
-            _gameController.OnPhaseChanged -= HandlePhaseChanged;
-            _gameController.OnWaveStarted -= HandleWaveStarted;
+            UnbindGameController();
+            ServiceLocator.UnregisterInstance(this);
         }
 
         /// <summary> エディタ構築ツール（ProjectSceneSetupTool）からカメラ参照を一括設定する。 </summary>
@@ -69,6 +59,66 @@ namespace Taurus.Runtime.Camera
             _resultCamera = resultCamera;
         }
 
+        private void ResolveAndBindGameController()
+        {
+            if (ServiceLocator.TryGetInstance<GameController>(out GameController located))
+            {
+                BindGameController(located);
+                return;
+            }
+
+            if (_gameController != null)
+            {
+                BindGameController(_gameController);
+            }
+            else
+            {
+                ApplyCameraForCurrentState();
+            }
+
+            ServiceLocator.RegisterAfterLocate<GameController>(HandleGameControllerLocated);
+        }
+
+        private void HandleGameControllerLocated(GameController controller)
+        {
+            if (this == null || !isActiveAndEnabled)
+            {
+                return;
+            }
+
+            BindGameController(controller);
+        }
+
+        private void BindGameController(GameController controller)
+        {
+            if (controller == null || ReferenceEquals(_subscribedController, controller))
+            {
+                return;
+            }
+
+            UnbindGameController();
+            _subscribedController = controller;
+            _gameController = controller;
+
+            _subscribedController.OnPhaseChanged += HandlePhaseChanged;
+            _subscribedController.OnWaveStarted += HandleWaveStarted;
+
+            // 有効化・接続時点の状態に合わせて初期カメラを反映
+            ApplyCameraForCurrentState();
+        }
+
+        private void UnbindGameController()
+        {
+            if (_subscribedController == null)
+            {
+                return;
+            }
+
+            _subscribedController.OnPhaseChanged -= HandlePhaseChanged;
+            _subscribedController.OnWaveStarted -= HandleWaveStarted;
+            _subscribedController = null;
+        }
+
         private void HandlePhaseChanged(GamePhase phase)
         {
             ApplyCameraForCurrentState();
@@ -82,13 +132,14 @@ namespace Taurus.Runtime.Camera
 
         private void ApplyCameraForCurrentState()
         {
-            if (_gameController == null)
+            GameController controller = _subscribedController != null ? _subscribedController : _gameController;
+            if (controller == null)
             {
                 ActivateCamera(_titleCamera);
                 return;
             }
 
-            switch (_gameController.CurrentPhase)
+            switch (controller.CurrentPhase)
             {
                 case GamePhase.Title:
                     ActivateCamera(_titleCamera);
@@ -98,7 +149,7 @@ namespace Taurus.Runtime.Camera
                     break;
                 case GamePhase.Playing:
                 case GamePhase.Success:
-                    bool isDual = _gameController.ActivePendulums != null && _gameController.ActivePendulums.Count >= 2;
+                    bool isDual = controller.ActivePendulums != null && controller.ActivePendulums.Count >= 2;
                     ActivateCamera(isDual ? _gameDualCamera : _gameSingleCamera);
                     break;
                 case GamePhase.Result:

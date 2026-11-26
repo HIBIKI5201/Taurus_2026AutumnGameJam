@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using SymphonyFrameWork.System;
+using SymphonyFrameWork.System.ServiceLocate;
 using Taurus.Runtime.Pendulum;
 using UnityEngine;
 
@@ -6,7 +8,7 @@ namespace Taurus.Runtime.Game
 {
     /// <summary>
     /// GameController の各種イベントを受け取り、SE / BGM を再生するオーディオ接続フック。
-    /// サウンド素材が納品されたら、インスペクターから各 AudioClip 欄へドラッグ＆ドロップするだけで鳴る。
+    /// SymphonyFramework の AudioManager（AudioConfig 設定時）またはローカル AudioSource を使用し、
     /// 未設定のクリップは安全に無音スキップされる。
     /// </summary>
     public class GameAudioHooks : MonoBehaviour
@@ -14,6 +16,10 @@ namespace Taurus.Runtime.Game
         [SerializeField] private GameController _gameController;
         [SerializeField] private AudioSource _seSource;
         [SerializeField] private AudioSource _bgmSource;
+
+        [Header("Symphony AudioManager（AudioConfig 設定時はこちらを優先）")]
+        [SerializeField] private AudioGroupTypeEnum _seAudioGroup = AudioGroupTypeEnum.None;
+        [SerializeField] private AudioGroupTypeEnum _bgmAudioGroup = AudioGroupTypeEnum.None;
 
         [Header("SE Clips（未設定時は無音）")]
         [SerializeField] private AudioClip _titlePressClip; // タイトルでSpaceを押した音
@@ -29,34 +35,16 @@ namespace Taurus.Runtime.Game
         [SerializeField] private AudioClip _gameBgmClip;    // インゲームWave中BGM
         [SerializeField] private AudioClip _resultBgmClip;  // リザルト画面BGM
 
+        private GameController _subscribedController;
+
         private void OnEnable()
         {
-            if (_gameController == null)
-            {
-                return;
-            }
-
-            _gameController.OnPhaseChanged += HandlePhaseChanged;
-            _gameController.OnTitlePressChanged += HandleTitlePressChanged;
-            _gameController.OnPlayerCountChanged += HandlePlayerCountChanged;
-            _gameController.OnPendulumTopCrossed += HandlePendulumTopCrossed;
-            _gameController.OnWaveSucceeded += HandleWaveSucceeded;
-            _gameController.OnGameFinished += HandleGameFinished;
+            ResolveAndBindGameController();
         }
 
         private void OnDisable()
         {
-            if (_gameController == null)
-            {
-                return;
-            }
-
-            _gameController.OnPhaseChanged -= HandlePhaseChanged;
-            _gameController.OnTitlePressChanged -= HandleTitlePressChanged;
-            _gameController.OnPlayerCountChanged -= HandlePlayerCountChanged;
-            _gameController.OnPendulumTopCrossed -= HandlePendulumTopCrossed;
-            _gameController.OnWaveSucceeded -= HandleWaveSucceeded;
-            _gameController.OnGameFinished -= HandleGameFinished;
+            UnbindGameController();
         }
 
         /// <summary> エディタ構築ツール（ProjectSceneSetupTool）から参照を設定する。 </summary>
@@ -65,6 +53,67 @@ namespace Taurus.Runtime.Game
             _gameController = gameController;
             _seSource = seSource;
             _bgmSource = bgmSource;
+        }
+
+        private void ResolveAndBindGameController()
+        {
+            if (ServiceLocator.TryGetInstance<GameController>(out GameController located))
+            {
+                BindGameController(located);
+                return;
+            }
+
+            if (_gameController != null)
+            {
+                BindGameController(_gameController);
+            }
+
+            ServiceLocator.RegisterAfterLocate<GameController>(HandleGameControllerLocated);
+        }
+
+        private void HandleGameControllerLocated(GameController controller)
+        {
+            if (this == null || !isActiveAndEnabled)
+            {
+                return;
+            }
+
+            BindGameController(controller);
+        }
+
+        private void BindGameController(GameController controller)
+        {
+            if (controller == null || ReferenceEquals(_subscribedController, controller))
+            {
+                return;
+            }
+
+            UnbindGameController();
+            _subscribedController = controller;
+            _gameController = controller;
+
+            _subscribedController.OnPhaseChanged += HandlePhaseChanged;
+            _subscribedController.OnTitlePressChanged += HandleTitlePressChanged;
+            _subscribedController.OnPlayerCountChanged += HandlePlayerCountChanged;
+            _subscribedController.OnPendulumTopCrossed += HandlePendulumTopCrossed;
+            _subscribedController.OnWaveSucceeded += HandleWaveSucceeded;
+            _subscribedController.OnGameFinished += HandleGameFinished;
+        }
+
+        private void UnbindGameController()
+        {
+            if (_subscribedController == null)
+            {
+                return;
+            }
+
+            _subscribedController.OnPhaseChanged -= HandlePhaseChanged;
+            _subscribedController.OnTitlePressChanged -= HandleTitlePressChanged;
+            _subscribedController.OnPlayerCountChanged -= HandlePlayerCountChanged;
+            _subscribedController.OnPendulumTopCrossed -= HandlePendulumTopCrossed;
+            _subscribedController.OnWaveSucceeded -= HandleWaveSucceeded;
+            _subscribedController.OnGameFinished -= HandleGameFinished;
+            _subscribedController = null;
         }
 
         private void HandlePhaseChanged(GamePhase phase)
@@ -122,28 +171,44 @@ namespace Taurus.Runtime.Game
 
         private void PlaySe(AudioClip clip)
         {
-            if (_seSource != null && clip != null)
+            AudioSource source = ResolveAudioSource(_seAudioGroup, _seSource);
+            if (source != null && clip != null)
             {
-                _seSource.PlayOneShot(clip);
+                source.PlayOneShot(clip);
             }
         }
 
         private void PlayBgm(AudioClip clip)
         {
-            if (_bgmSource == null || clip == null)
+            AudioSource source = ResolveAudioSource(_bgmAudioGroup, _bgmSource);
+            if (source == null || clip == null)
             {
                 return;
             }
 
             // 同じBGMが既に再生中なら途切れさせない（Title → Rules 遷移時など）
-            if (_bgmSource.clip == clip && _bgmSource.isPlaying)
+            if (source.clip == clip && source.isPlaying)
             {
                 return;
             }
 
-            _bgmSource.clip = clip;
-            _bgmSource.loop = true;
-            _bgmSource.Play();
+            source.clip = clip;
+            source.loop = true;
+            source.Play();
+        }
+
+        private static AudioSource ResolveAudioSource(AudioGroupTypeEnum group, AudioSource fallback)
+        {
+            if (group != AudioGroupTypeEnum.None)
+            {
+                AudioSource managedSource = AudioManager.GetAudioSource(group.ToString());
+                if (managedSource != null)
+                {
+                    return managedSource;
+                }
+            }
+
+            return fallback;
         }
     }
 }

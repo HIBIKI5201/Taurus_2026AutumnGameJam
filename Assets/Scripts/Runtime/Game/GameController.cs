@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using SymphonyFrameWork.System.SceneLoad;
+using SymphonyFrameWork.System.ServiceLocate;
 using Taurus.Runtime.Input;
 using Taurus.Runtime.Pendulum;
 using Taurus.Runtime.Stage;
@@ -12,13 +14,13 @@ namespace Taurus.Runtime.Game
 {
     /// <summary>
     /// タイトル・ルール・ゲーム・成功・リザルトの5状態遷移と、Wave進行・入力制御・成否判定を統括する中核クラス。
-    /// GameScene の常駐オブジェクト（GameSystem）にアタッチする。
+    /// GameScene の常駐オブジェクト（GameSystem）にアタッチし、ServiceLocator（Singleton）で単一性を保証する。
     ///
     /// 【引き継ぎ・設計ポイント】
     /// - 時間計測は Time.timeScale の影響を受けない unscaledDeltaTime / unscaledTime を使用する。
     /// - 入力は ActionMap から C# Generate した GameInputActions と UI ボタンの両方から同じ Handle〇〇Input メソッドへ集約している。
     /// - 正解カウントはフレーム落ち等の誤差を避けるため、実測イベント数ではなくスケジュール予定数の合計（_expectedCount）を使用する。
-    /// - UI（HUDController）やサウンド（GameAudioHooks）とは C# event 経由で疎結合に連携している。
+    /// - UI（HUDController）やサウンド（GameAudioHooks）とは C# event および ServiceLocator 経由で疎結合に連携している。
     /// </summary>
     public class GameController : MonoBehaviour
     {
@@ -62,6 +64,8 @@ namespace Taurus.Runtime.Game
         private float _waveRemainingSeconds = WAVE_DURATION_SECONDS;
         private uint _runSeed;
         private bool _isStageReady;
+        private string _ownerSceneName;
+        private bool _isDuplicateInstance;
 
         // Success 待機中の UniTask をリセットや破棄時に安全にキャンセルするためのトークンソース
         private CancellationTokenSource _phaseCts;
@@ -133,8 +137,29 @@ namespace Taurus.Runtime.Game
             _doublePendulumPrefab = doublePrefab;
         }
 
+        private void Awake()
+        {
+            _ownerSceneName = gameObject.scene.name;
+        }
+
         private void OnEnable()
         {
+            // 重複生成された場合は ServiceLocator 側で自動破棄されるため、入力や初期化を開始しない
+            if (!ServiceLocator.RegisterInstanceWithAutoDispose(this, LocateTypeEnum.Singleton))
+            {
+                _isDuplicateInstance = true;
+                Debug.LogWarning($"[{nameof(GameController)}] 重複した GameController が検出されたため、このインスタンスを破棄します。", this);
+                enabled = false;
+                return;
+            }
+
+            _isDuplicateInstance = false;
+
+            if (!string.IsNullOrWhiteSpace(_ownerSceneName) && _ownerSceneName != "DontDestroyOnLoad")
+            {
+                SceneLoader.RegisterLoadedScene(_ownerSceneName, StageLoader.BASE_SCENE_PRIORITY);
+            }
+
             _inputActions ??= new GameInputActions();
             _inputActions.Game.CountUp.performed += HandleCountUpPerformed;
             _inputActions.Game.CountDown.performed += HandleCountDownPerformed;
@@ -144,19 +169,27 @@ namespace Taurus.Runtime.Game
 
         private void OnDisable()
         {
-            if (_inputActions == null)
+            if (_inputActions != null)
             {
-                return;
+                _inputActions.Game.CountUp.performed -= HandleCountUpPerformed;
+                _inputActions.Game.CountDown.performed -= HandleCountDownPerformed;
+                _inputActions.Game.Cancel.performed -= HandleCancelPerformed;
+                _inputActions.Game.Disable();
             }
 
-            _inputActions.Game.CountUp.performed -= HandleCountUpPerformed;
-            _inputActions.Game.CountDown.performed -= HandleCountDownPerformed;
-            _inputActions.Game.Cancel.performed -= HandleCancelPerformed;
-            _inputActions.Game.Disable();
+            if (!_isDuplicateInstance)
+            {
+                ServiceLocator.UnregisterInstance(this);
+            }
         }
 
         private void Start()
         {
+            if (_isDuplicateInstance)
+            {
+                return;
+            }
+
             InitializeAsync().Forget();
         }
 
@@ -171,18 +204,36 @@ namespace Taurus.Runtime.Game
         /// <summary> 起動時の初期処理：トップ3記録を読み込み、タイトル初期化後にデフォルトStageをAdditiveロードする。 </summary>
         private async UniTaskVoid InitializeAsync()
         {
-            _recordStore.Load();
+            CancellationToken destroyToken = this.GetCancellationTokenOnDestroy();
+
+            try
+            {
+                await _recordStore.LoadAsync(destroyToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
             ResetToTitle();
 
-            if (_stageLoader != null)
+            StageLoader stageLoader = ResolveStageLoader();
+            if (stageLoader != null)
             {
-                StageAnchor anchor = await _stageLoader.LoadDefaultStageAsync(this.GetCancellationTokenOnDestroy());
-                _isStageReady = anchor != null;
+                try
+                {
+                    StageAnchor anchor = await stageLoader.LoadDefaultStageAsync(destroyToken);
+                    _isStageReady = anchor != null;
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
             }
             else
             {
-                Debug.LogWarning($"[{nameof(GameController)}] StageLoader が未設定のためシーン内の StageAnchor を検索します。", this);
-                _isStageReady = FindFirstObjectByType<StageAnchor>() != null;
+                Debug.LogWarning($"[{nameof(GameController)}] StageLoader が未設定のため ServiceLocator の StageAnchor を確認します。", this);
+                _isStageReady = ServiceLocator.TryGetInstance<StageAnchor>(out _);
             }
         }
 
@@ -296,7 +347,8 @@ namespace Taurus.Runtime.Game
 
         private void StartRunFromRules()
         {
-            if (!_isStageReady && _stageLoader != null && _stageLoader.CurrentAnchor == null)
+            StageAnchor anchor = ResolveStageAnchor();
+            if (!_isStageReady && anchor == null)
             {
                 Debug.LogWarning($"[{nameof(GameController)}] StageAnchor が未準備です。デフォルト位置で開始します。", this);
             }
@@ -330,7 +382,7 @@ namespace Taurus.Runtime.Game
                 ? _stageDefinition.GetWaveConfig(_currentWave)
                 : StageDefinition.GetDefaultWaveConfig(_currentWave);
 
-            StageAnchor anchor = _stageLoader != null ? _stageLoader.CurrentAnchor : FindFirstObjectByType<StageAnchor>();
+            StageAnchor anchor = ResolveStageAnchor();
             Transform parentRoot = anchor != null ? anchor.PendulumRoot : transform;
 
             int singleCount = config.SinglePendulumCount;
@@ -447,8 +499,30 @@ namespace Taurus.Runtime.Game
             SetPhase(GamePhase.Result);
 
             int clearedWaves = Mathf.Max(0, _currentWave - 1);
-            IReadOnlyList<int> updatedRecords = _recordStore.RecordScore(clearedWaves);
+            IReadOnlyList<int> updatedRecords = _recordStore.RecordScoreAndSave(clearedWaves, this.GetCancellationTokenOnDestroy());
             OnGameFinished?.Invoke(clearedWaves, _expectedCount, _playerCount, updatedRecords);
+        }
+
+        private StageLoader ResolveStageLoader()
+        {
+            if (ServiceLocator.TryGetInstance<StageLoader>(out StageLoader located) && located != null)
+            {
+                _stageLoader = located;
+                return located;
+            }
+
+            return _stageLoader;
+        }
+
+        private StageAnchor ResolveStageAnchor()
+        {
+            StageLoader stageLoader = ResolveStageLoader();
+            if (stageLoader != null && stageLoader.CurrentAnchor != null)
+            {
+                return stageLoader.CurrentAnchor;
+            }
+
+            return ServiceLocator.TryGetInstance<StageAnchor>(out StageAnchor locatedAnchor) ? locatedAnchor : null;
         }
 
         private void ResetToTitle()
