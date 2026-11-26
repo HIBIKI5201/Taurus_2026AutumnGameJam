@@ -7,7 +7,8 @@ namespace Taurus.Runtime.Pendulum
     /// PendulumMotion と同じ Prefab ルートにアタッチして使用する。
     ///
     /// 【3D / 2D 両対応と引き継ぎポイント】
-    /// - 3D 仮グレーボックスおよび本番 3D モデル（MeshRenderer）では MaterialPropertyBlock で _BaseColor と _EmissionColor を更新する。
+    /// - 3D モデル（MeshRenderer）では Awake 時にマテリアルの _EMISSION キーワードを有効化したうえで、
+    ///   MaterialPropertyBlock で _BaseColor と HDR の _EmissionColor を更新する（Bloom 連携対応）。
     /// - 2D SpriteRenderer が設定されている場合も互換動作する。
     /// - 本番パーティクル等を追加したい場合は、HandleTopCrossed 内で再生処理を追加する。
     /// </summary>
@@ -17,11 +18,13 @@ namespace Taurus.Runtime.Pendulum
         // 仕様書第9章準拠：真上通過時の発光持続時間（秒）
         private const float FLASH_DURATION = 0.48f;
         private const float PEAK_SCALE_MULTIPLIER = 1.45f;
-        private const float EMISSION_INTENSITY = 3.2f; // 視認性向上のため強め
 
         private static readonly int BASE_COLOR_ID = Shader.PropertyToID("_BaseColor");
         private static readonly int COLOR_ID = Shader.PropertyToID("_Color");
         private static readonly int EMISSION_COLOR_ID = Shader.PropertyToID("_EmissionColor");
+
+        [Header("Emission Settings（Bloomと連携するHDR発光強度）")]
+        [SerializeField, Min(0f)] private float _emissionIntensity = 6.0f;
 
         [Header("Parent Bob（親玉）")]
         [SerializeField] private Transform _parentBob;
@@ -56,6 +59,10 @@ namespace Taurus.Runtime.Pendulum
             {
                 _childBaseScale = _childBob.localScale;
             }
+
+            // URP Lit 等はマテリアル側で _EMISSION キーワードが有効でないと _EmissionColor を無視するため確実に有効化する
+            EnableEmissionKeyword(_parentBobMeshRenderer);
+            EnableEmissionKeyword(_childBobMeshRenderer);
 
             if (_motion != null)
             {
@@ -112,7 +119,8 @@ namespace Taurus.Runtime.Pendulum
                     _parentBaseScale,
                     PendulumFlashPalette.ParentBaseColor,
                     PendulumFlashPalette.ParentFlashColor,
-                    _parentFlashTimer / FLASH_DURATION);
+                    _parentFlashTimer / FLASH_DURATION,
+                    _emissionIntensity);
             }
 
             if (_childFlashTimer > 0f)
@@ -126,7 +134,8 @@ namespace Taurus.Runtime.Pendulum
                     _childBaseScale,
                     PendulumFlashPalette.ChildBaseColor,
                     PendulumFlashPalette.ChildFlashColor,
-                    _childFlashTimer / FLASH_DURATION);
+                    _childFlashTimer / FLASH_DURATION,
+                    _emissionIntensity);
             }
         }
 
@@ -143,7 +152,8 @@ namespace Taurus.Runtime.Pendulum
                     _childBaseScale,
                     PendulumFlashPalette.ChildBaseColor,
                     PendulumFlashPalette.ChildFlashColor,
-                    1f);
+                    1f,
+                    _emissionIntensity);
             }
             else
             {
@@ -156,7 +166,28 @@ namespace Taurus.Runtime.Pendulum
                     _parentBaseScale,
                     PendulumFlashPalette.ParentBaseColor,
                     PendulumFlashPalette.ParentFlashColor,
-                    1f);
+                    1f,
+                    _emissionIntensity);
+            }
+        }
+
+        private static void EnableEmissionKeyword(Renderer meshRenderer)
+        {
+            if (meshRenderer == null)
+            {
+                return;
+            }
+
+            Material[] materials = meshRenderer.materials;
+            for (int i = 0; i < materials.Length; i++)
+            {
+                if (materials[i] == null)
+                {
+                    continue;
+                }
+
+                materials[i].EnableKeyword("_EMISSION");
+                materials[i].globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
             }
         }
 
@@ -168,7 +199,8 @@ namespace Taurus.Runtime.Pendulum
             Vector3 baseScale,
             Color baseColor,
             Color flashColor,
-            float normalizedRemaining)
+            float normalizedRemaining,
+            float emissionIntensity)
         {
             // 二次カーブで素早く光って滑らかに元へ戻す
             float ease = normalizedRemaining * normalizedRemaining;
@@ -180,13 +212,14 @@ namespace Taurus.Runtime.Pendulum
 
             Color currentColor = Color.Lerp(baseColor, flashColor, ease);
 
-            // 3D MeshRenderer（URP Lit）は MaterialPropertyBlock で色と Emission を更新
+            // 3D MeshRenderer（URP Lit）は MaterialPropertyBlock で色と HDR Linear Emission を更新
             if (meshRenderer != null && propBlock != null)
             {
                 meshRenderer.GetPropertyBlock(propBlock);
                 propBlock.SetColor(BASE_COLOR_ID, currentColor);
                 propBlock.SetColor(COLOR_ID, currentColor);
-                propBlock.SetColor(EMISSION_COLOR_ID, flashColor * (ease * EMISSION_INTENSITY));
+                Color hdrEmission = flashColor.linear * (ease * emissionIntensity);
+                propBlock.SetColor(EMISSION_COLOR_ID, hdrEmission);
                 meshRenderer.SetPropertyBlock(propBlock);
             }
 
