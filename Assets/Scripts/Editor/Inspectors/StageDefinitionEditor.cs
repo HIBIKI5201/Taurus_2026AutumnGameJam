@@ -26,6 +26,7 @@ namespace Taurus.Editor.Inspectors
         private static readonly Color INTERVAL_BAND_A = new Color(1f, 1f, 1f, 0.03f);
         private static readonly Color INTERVAL_BAND_B = new Color(1f, 1f, 1f, 0.08f);
         private static readonly Color SPLIT_LINE_COLOR = new Color(1.0f, 0.85f, 0.30f, 0.85f);
+        private static readonly Color SELECTED_WAVE_LINE_COLOR = new Color(1.0f, 1.0f, 1.0f, 0.45f);
 
         private int _selectedWaveIndex;
         private int _simSeed = 1000;
@@ -76,10 +77,10 @@ namespace Taurus.Editor.Inspectors
 
         private void DrawOverviewSection(StageDefinition def)
         {
-            EditorGUILayout.LabelField("難易度評価ダッシュボード（数理・DPモデル）", EditorStyles.boldLabel);
-
             IReadOnlyList<WaveConfig> waves = def.Waves;
             int count = waves.Count;
+            EditorGUILayout.LabelField($"難易度評価ダッシュボード（全 {count} Wave / 超過時: {def.OverflowBehavior}）", EditorStyles.boldLabel);
+
             if (count == 0)
             {
                 EditorGUILayout.HelpBox("Wave 定義が空です。", MessageType.Warning);
@@ -110,9 +111,15 @@ namespace Taurus.Editor.Inspectors
                 EditorGUILayout.HelpBox("到達不能な量制約 [Q_min, Q_max] を含む Wave があります。下の詳細で赤表示の区間を確認してください。", MessageType.Error);
             }
 
-            // 全 Wave 横断の難易度推移グラフ
-            Rect rect = GUILayoutUtility.GetRect(10f, 140f, GUILayout.ExpandWidth(true));
-            DrawWaveProgressionGraph(rect, reports, maxY);
+            // 全 Wave 横断の難易度推移グラフ（クリックで任意 Wave へジャンプ可能）
+            Rect rect = GUILayoutUtility.GetRect(10f, 145f, GUILayout.ExpandWidth(true));
+            int clickedWave = DrawWaveProgressionGraph(rect, reports, maxY, _selectedWaveIndex);
+            if (clickedWave >= 0 && clickedWave != _selectedWaveIndex)
+            {
+                _selectedWaveIndex = clickedWave;
+                _simSummary = string.Empty;
+                Repaint();
+            }
 
             // 凡例
             EditorGUILayout.BeginHorizontal();
@@ -132,13 +139,19 @@ namespace Taurus.Editor.Inspectors
 
             _selectedWaveIndex = Mathf.Clamp(_selectedWaveIndex, 0, waves.Count - 1);
 
+            // クイックナビゲーション＋Wave追加・複製・並び替え・削除バー（任意 Wave 数対応）
+            DrawWaveManagementBar(def, waves);
+
+            // Inspector 幅に応じて自動折り返しする SelectionGrid（W1〜W15 以上でも見切れない）
             string[] tabs = new string[waves.Count];
             for (int i = 0; i < waves.Count; i++)
             {
                 tabs[i] = $"W{i + 1}";
             }
 
-            int nextIndex = GUILayout.Toolbar(_selectedWaveIndex, tabs);
+            float availWidth = Mathf.Max(220f, EditorGUIUtility.currentViewWidth - 44f);
+            int columns = Mathf.Clamp(Mathf.FloorToInt(availWidth / 46f), 4, 10);
+            int nextIndex = GUILayout.SelectionGrid(_selectedWaveIndex, tabs, columns);
             if (nextIndex != _selectedWaveIndex)
             {
                 _selectedWaveIndex = nextIndex;
@@ -410,6 +423,110 @@ namespace Taurus.Editor.Inspectors
             _simSummary = string.Empty;
         }
 
+        private void DrawWaveManagementBar(StageDefinition def, IReadOnlyList<WaveConfig> waves)
+        {
+            string[] popupLabels = new string[waves.Count];
+            for (int i = 0; i < waves.Count; i++)
+            {
+                WaveConfig w = waves[i];
+                popupLabels[i] = $"W{i + 1:00}（単{w.SinglePendulumCount}/二{w.DoublePendulumCount}/三{w.TriplePendulumCount}・{w.TotalBobCount}玉）";
+            }
+
+            EditorGUILayout.BeginHorizontal();
+            using (new EditorGUI.DisabledScope(_selectedWaveIndex <= 0))
+            {
+                if (GUILayout.Button("◀", GUILayout.Width(26f)))
+                {
+                    _selectedWaveIndex--;
+                    _simSummary = string.Empty;
+                }
+            }
+
+            int picked = EditorGUILayout.Popup(_selectedWaveIndex, popupLabels);
+            if (picked != _selectedWaveIndex)
+            {
+                _selectedWaveIndex = picked;
+                _simSummary = string.Empty;
+            }
+
+            using (new EditorGUI.DisabledScope(_selectedWaveIndex >= waves.Count - 1))
+            {
+                if (GUILayout.Button("▶", GUILayout.Width(26f)))
+                {
+                    _selectedWaveIndex++;
+                    _simSummary = string.Empty;
+                }
+            }
+
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("+ Wave追加"))
+            {
+                Undo.RecordObject(def, "Add Wave");
+                _selectedWaveIndex = def.AddWave();
+                EditorUtility.SetDirty(def);
+                serializedObject.Update();
+                _simSummary = string.Empty;
+            }
+
+            if (GUILayout.Button("複製"))
+            {
+                Undo.RecordObject(def, "Duplicate Wave");
+                _selectedWaveIndex = def.DuplicateWave(_selectedWaveIndex);
+                EditorUtility.SetDirty(def);
+                serializedObject.Update();
+                _simSummary = string.Empty;
+            }
+
+            using (new EditorGUI.DisabledScope(_selectedWaveIndex <= 0))
+            {
+                if (GUILayout.Button("▲", GUILayout.Width(28f)))
+                {
+                    Undo.RecordObject(def, "Move Wave Up");
+                    if (def.MoveWave(_selectedWaveIndex, _selectedWaveIndex - 1))
+                    {
+                        _selectedWaveIndex--;
+                        EditorUtility.SetDirty(def);
+                        serializedObject.Update();
+                        _simSummary = string.Empty;
+                    }
+                }
+            }
+
+            using (new EditorGUI.DisabledScope(_selectedWaveIndex >= waves.Count - 1))
+            {
+                if (GUILayout.Button("▼", GUILayout.Width(28f)))
+                {
+                    Undo.RecordObject(def, "Move Wave Down");
+                    if (def.MoveWave(_selectedWaveIndex, _selectedWaveIndex + 1))
+                    {
+                        _selectedWaveIndex++;
+                        EditorUtility.SetDirty(def);
+                        serializedObject.Update();
+                        _simSummary = string.Empty;
+                    }
+                }
+            }
+
+            using (new EditorGUI.DisabledScope(waves.Count <= 1))
+            {
+                if (GUILayout.Button("× 削除", GUILayout.Width(58f)))
+                {
+                    Undo.RecordObject(def, "Remove Wave");
+                    if (def.RemoveWave(_selectedWaveIndex))
+                    {
+                        _selectedWaveIndex = Mathf.Clamp(_selectedWaveIndex, 0, def.Waves.Count - 1);
+                        EditorUtility.SetDirty(def);
+                        serializedObject.Update();
+                        _simSummary = string.Empty;
+                    }
+                }
+            }
+
+            EditorGUILayout.EndHorizontal();
+        }
+
         private void DrawUtilityButtons(StageDefinition def)
         {
             EditorGUILayout.BeginHorizontal();
@@ -488,7 +605,7 @@ namespace Taurus.Editor.Inspectors
             return $"[100回ランタイム検証] 1玉実測平均={avg:0.00}（理論={report.TotalExpectedQuantityPerBob:0.00}）, 最小={minTotal}, 最大={maxTotal}{constraintNote}";
         }
 
-        private static void DrawWaveProgressionGraph(Rect rect, WaveDifficultyReport[] reports, float maxY)
+        private static int DrawWaveProgressionGraph(Rect rect, WaveDifficultyReport[] reports, float maxY, int selectedWaveIndex)
         {
             EditorGUI.DrawRect(rect, GRAPH_BG);
             DrawGrid(rect, 4);
@@ -496,7 +613,7 @@ namespace Taurus.Editor.Inspectors
             int n = reports.Length;
             if (n == 0)
             {
-                return;
+                return -1;
             }
 
             float padL = 32f;
@@ -510,6 +627,10 @@ namespace Taurus.Editor.Inspectors
             Vector3[] l2Pts = new Vector3[n];
             Vector3[] scorePts = new Vector3[n];
 
+            // Wave 数が増えても横軸ラベルが重ならないよう表示ステップを自動調整する
+            int maxLabels = Mathf.Max(2, Mathf.FloorToInt(w / 32f));
+            int labelStep = Mathf.Max(1, Mathf.CeilToInt((float)n / maxLabels));
+
             for (int i = 0; i < n; i++)
             {
                 float x = rect.x + padL + (n == 1 ? w * 0.5f : w * i / (n - 1));
@@ -517,7 +638,15 @@ namespace Taurus.Editor.Inspectors
                 l2Pts[i] = new Vector3(x, rect.y + padT + h * (1f - Mathf.Clamp01((float)reports[i].L2RmsDensity / maxY)), 0f);
                 scorePts[i] = new Vector3(x, rect.y + padT + h * (1f - Mathf.Clamp01((float)reports[i].BlendedDifficultyScore / maxY)), 0f);
 
-                GUI.Label(new Rect(x - 12f, rect.yMax - 17f, 28f, 16f), $"W{i + 1}", EditorStyles.miniLabel);
+                if (i == selectedWaveIndex)
+                {
+                    EditorGUI.DrawRect(new Rect(x - 0.5f, rect.y + padT, 1.5f, h), SELECTED_WAVE_LINE_COLOR);
+                }
+
+                if (i == 0 || i == n - 1 || i == selectedWaveIndex || i % labelStep == 0)
+                {
+                    GUI.Label(new Rect(x - 12f, rect.yMax - 17f, 30f, 16f), $"W{i + 1}", EditorStyles.miniLabel);
+                }
             }
 
             Handles.BeginGUI();
@@ -535,6 +664,18 @@ namespace Taurus.Editor.Inspectors
 
             GUI.Label(new Rect(rect.x + 4f, rect.y + 2f, 40f, 14f), maxY.ToString("0.0"), EditorStyles.miniLabel);
             GUI.Label(new Rect(rect.x + 4f, rect.yMax - 30f, 40f, 14f), "0.0", EditorStyles.miniLabel);
+
+            // グラフクリックで最寄りの Wave へ直接ジャンプ
+            Event evt = Event.current;
+            if (evt != null && evt.type == EventType.MouseDown && evt.button == 0 && rect.Contains(evt.mousePosition))
+            {
+                float norm = Mathf.Clamp01((evt.mousePosition.x - (rect.x + padL)) / w);
+                int clicked = n == 1 ? 0 : Mathf.RoundToInt(norm * (n - 1));
+                evt.Use();
+                return Mathf.Clamp(clicked, 0, n - 1);
+            }
+
+            return -1;
         }
 
         private static void DrawIntervalCurveGraph(Rect rect, WaveDifficultyReport report)

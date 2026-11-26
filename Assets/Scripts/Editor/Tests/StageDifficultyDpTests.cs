@@ -431,5 +431,46 @@ namespace Taurus.Editor.Tests
             // ソフトペナルティにより同時発光回数が無対策時の半分以下に減少することを検証
             Assert.Less(antiSyncOverlaps * 2, naiveOverlaps, $"naive={naiveOverlaps}, antiSync={antiSyncOverlaps}");
         }
+
+        [Test]
+        public void StageDefinition_ArbitraryWaveCountCrudAndOverflowModes_WorkCorrectly()
+        {
+            StageDefinition def = UnityEngine.ScriptableObject.CreateInstance<StageDefinition>();
+            try
+            {
+                def.ApplyOptimal15WavePreset();
+                Assert.AreEqual(15, def.Waves.Count);
+
+                // 任意Wave数への拡張（15 → 20 Wave）と複製独立性
+                for (int i = 0; i < 5; i++)
+                {
+                    def.AddWave();
+                }
+
+                Assert.AreEqual(20, def.Waves.Count);
+                int dupIndex = def.DuplicateWave(0);
+                Assert.AreEqual(1, dupIndex);
+                Assert.AreEqual(21, def.Waves.Count);
+
+                // 複製元の変更が複製先に影響しないこと（ディープコピー確認）
+                def.Waves[0].SetWaveQuantityConstraint(true, 2, 2);
+                Assert.AreNotEqual(2, def.Waves[1].WaveMinQuantity);
+
+                // 移動・削除
+                Assert.IsTrue(def.MoveWave(1, 0));
+                Assert.IsTrue(def.RemoveWave(0));
+                Assert.AreEqual(20, def.Waves.Count);
+
+                // 超過ポリシー（ClampToLast / LoopFromStart / LoopLastSection）
+                Assert.AreEqual(19, StageDefinition.ResolveWaveIndex(25, 20, WaveOverflowBehavior.ClampToLast));
+                Assert.AreEqual(0, StageDefinition.ResolveWaveIndex(21, 20, WaveOverflowBehavior.LoopFromStart));
+                Assert.AreEqual(17, StageDefinition.ResolveWaveIndex(21, 20, WaveOverflowBehavior.LoopLastSection, 3));
+                Assert.AreEqual(18, StageDefinition.ResolveWaveIndex(22, 20, WaveOverflowBehavior.LoopLastSection, 3));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(def);
+            }
+        }
     }
 }
