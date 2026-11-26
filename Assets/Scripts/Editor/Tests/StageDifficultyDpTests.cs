@@ -453,8 +453,8 @@ namespace Taurus.Editor.Tests
                 Assert.AreEqual(21, def.Waves.Count);
 
                 // 複製元の変更が複製先に影響しないこと（ディープコピー確認）
-                def.Waves[0].SetWaveQuantityConstraint(true, 2, 2);
-                Assert.AreNotEqual(2, def.Waves[1].WaveMinQuantity);
+                def.Waves[0].SetWaveQuantityConstraint(true, 5, 5);
+                Assert.AreNotEqual(5, def.Waves[1].WaveMinQuantity);
 
                 // 移動・削除
                 Assert.IsTrue(def.MoveWave(1, 0));
@@ -470,6 +470,37 @@ namespace Taurus.Editor.Tests
             finally
             {
                 UnityEngine.Object.DestroyImmediate(def);
+            }
+        }
+
+        [Test]
+        public void Wave1Tutorial_GuaranteesAtLeastOneCrossingInBothFirstAndSecond4Seconds()
+        {
+            StageDefinition asset = UnityEditor.AssetDatabase.LoadAssetAtPath<StageDefinition>("Assets/Settings/StageDefinition.asset");
+            Assert.IsNotNull(asset);
+            WaveConfig wave1 = asset.GetWaveConfig(1);
+            WaveDifficultyReport report = asset.EvaluateWave(1);
+            Assert.IsTrue(report.AllConstraintsFeasible);
+
+            for (uint i = 0; i < 50u; i++)
+            {
+                MotionSchedule schedule = MotionScheduleGenerator.Generate(15000u + i * 7919u, wave1);
+                int firstHalf = 0;
+                int secondHalf = 0;
+                foreach (MotionSegment seg in schedule.Segments)
+                {
+                    if (seg.StartTime < 4.0 - 1e-6)
+                    {
+                        firstHalf += seg.ExpectedTopCount;
+                    }
+                    else
+                    {
+                        secondHalf += seg.ExpectedTopCount;
+                    }
+                }
+
+                Assert.GreaterOrEqual(firstHalf, 1, $"Wave1 前半4秒以内で最低1回保証違反 (trial={i})");
+                Assert.GreaterOrEqual(secondHalf, 1, $"Wave1 後半4秒以内で最低1回保証違反 (trial={i})");
             }
         }
     }
