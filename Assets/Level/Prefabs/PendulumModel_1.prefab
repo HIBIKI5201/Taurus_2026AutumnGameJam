@@ -217,7 +217,7 @@ MonoBehaviour:
   _parentBob: {fileID: 0}
   _parentBobMeshRenderer: {fileID: 252562121816610870}
   _parentBobRenderer: {fileID: 0}
-  _parentIdleEmissionColor: {r: 0.7490196, g: 0.5154362, b: 0.21905282, a: 1}
+  _parentIdleEmissionColor: {r: 1.2934737, g: 1.1121168, b: 0.6028075, a: 1}
   _parentFlashEmissionColor: {r: 4.974516, g: 8.250632, b: 0, a: 6}
   _childBob: {fileID: 0}
   _childBobMeshRenderer: {fileID: 0}
