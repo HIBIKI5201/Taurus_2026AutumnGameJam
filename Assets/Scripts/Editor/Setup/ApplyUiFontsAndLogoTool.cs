@@ -13,8 +13,12 @@ namespace Taurus.Editor.Setup
         private const string ZEN_MARU_PATH = "Assets/AssetStoreTools/Fonts/ZenMaruGothic/ZenMaruGothic-Bold.ttf";
         private const string FIRJAR_PATH = "Assets/AssetStoreTools/Fonts/Firjar/static/Firjar_SemiCondensed-SemiBold.ttf";
         private const string TEAM_LOGO_PATH = "Assets/Level/UI/Logo_TeamTaurus.png";
+        private const string SUCCESS_BANNER_PATH = "Assets/Level/UI/UI_SuccessBanner.png";
         private const string TITLE_CHARA_PATH = "Assets/AssetStoreTools/Characters/Chara_Girl_Title.png";
         private const string GAME_SCENE_PATH = "Assets/Scenes/GameScene.unity";
+
+        // トンマナ確定カラー（#7A544E ベース茶）
+        private static readonly Color TONMANA_BROWN = new Color(0.478f, 0.329f, 0.306f, 1f);
 
         // 英字・大きく表示する数字の Text オブジェクト名（フォントメモ.txt 準拠で Firjar を割り当てる）
         private static readonly HashSet<string> FIRJAR_TEXT_NAMES = new HashSet<string>
@@ -168,6 +172,71 @@ namespace Taurus.Editor.Setup
             AssetDatabase.SaveAssets();
 
             Debug.Log($"[{nameof(ApplyUiFontsAndLogoTool)}] 適用完了: ZenMaruGothic={zenCount}件, Firjar={firjarCount}件, SplashLogo設定済, Title/Creditsロゴ配置済");
+        }
+
+        [MenuItem("Taurus/Apply Success Banner Tonmana")]
+        public static void ApplySuccessBannerTonmana()
+        {
+            EnsureSpriteImport(SUCCESS_BANNER_PATH);
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+
+            Sprite bannerSprite = AssetDatabase.LoadAssetAtPath<Sprite>(SUCCESS_BANNER_PATH);
+            Font zenMaru = AssetDatabase.LoadAssetAtPath<Font>(ZEN_MARU_PATH);
+            if (bannerSprite == null || zenMaru == null)
+            {
+                Debug.LogError($"[{nameof(ApplyUiFontsAndLogoTool)}] バナー素材またはフォントが見つかりません。");
+                return;
+            }
+
+            Scene scene = EditorSceneManager.GetSceneByPath(GAME_SCENE_PATH);
+            if (!scene.IsValid() || !scene.isLoaded)
+            {
+                scene = EditorSceneManager.OpenScene(GAME_SCENE_PATH, OpenSceneMode.Single);
+            }
+
+            Transform canvas = FindChildByName(scene, "Canvas");
+            Transform banner = canvas != null ? canvas.Find("GamePanel/SuccessBanner") : null;
+            if (banner == null)
+            {
+                Debug.LogError($"[{nameof(ApplyUiFontsAndLogoTool)}] Canvas/GamePanel/SuccessBanner が見つかりません。");
+                return;
+            }
+
+            Image bannerImage = banner.GetComponent<Image>();
+            if (bannerImage != null)
+            {
+                bannerImage.sprite = bannerSprite;
+                bannerImage.color = Color.white;
+                bannerImage.type = Image.Type.Simple;
+                bannerImage.preserveAspect = true;
+                bannerImage.raycastTarget = false;
+                EditorUtility.SetDirty(bannerImage);
+            }
+
+            if (banner is RectTransform bannerRt)
+            {
+                bannerRt.anchoredPosition = new Vector2(0f, 240f);
+                bannerRt.sizeDelta = new Vector2(720f, 116f);
+                EditorUtility.SetDirty(bannerRt);
+            }
+
+            Text label = banner.GetComponentInChildren<Text>(true);
+            if (label != null)
+            {
+                label.font = zenMaru;
+                label.color = TONMANA_BROWN;
+                label.fontSize = 38;
+                label.fontStyle = FontStyle.Bold;
+                label.alignment = TextAnchor.MiddleCenter;
+                label.rectTransform.anchoredPosition = Vector2.zero;
+                label.rectTransform.sizeDelta = new Vector2(560f, 76f);
+                EditorUtility.SetDirty(label);
+            }
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[{nameof(ApplyUiFontsAndLogoTool)}] SuccessBanner のトンマナ適用完了");
         }
 
         private static bool ShouldUseFirjar(Text text)
