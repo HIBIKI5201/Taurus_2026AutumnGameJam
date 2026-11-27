@@ -34,6 +34,19 @@ namespace Taurus.Runtime.Game
         [SerializeField] private AudioClip _countFloorClip; // カウンター0で減算しようとした時のキャンセル音
         [SerializeField] private AudioClip _recordHighClip; // トップ3入りした時の新記録ジングル
 
+        [Header("Voice Clips（未設定時は無音）")]
+        [SerializeField] private AudioClip _startVoiceClip;         // ゲーム開始（ルール説明から・リトライ）
+        [SerializeField] private AudioClip _waveClearVoiceClip;     // Wave 正解（次のステージに行く前）
+        [SerializeField] private AudioClip _retireVoiceClip;        // Esc で途中終了したとき
+        [SerializeField] private AudioClip _resultRankInVoiceClip;  // リザルト：トップ3に入ったとき
+        [SerializeField] private AudioClip _resultRankOutVoiceClip; // リザルト：ランキングに入らなかったとき
+
+        [Tooltip("ボイスの再生音量倍率")]
+        [SerializeField, Range(0f, 1.5f)] private float _voiceVolumeScale = 1.0f;
+
+        [Tooltip("ゲームオーバー音からリザルトのボイスまでの間隔（秒）")]
+        [SerializeField] private float _resultVoiceDelaySeconds = 0.6f;
+
         [Tooltip("ゲームオーバー音から新記録ジングルまでの間隔（秒）")]
         [SerializeField] private float _recordHighDelaySeconds = 1.0f;
 
@@ -59,6 +72,10 @@ namespace Taurus.Runtime.Game
         private readonly Dictionary<AudioClip, AudioClip> _trimmedClipCache = new Dictionary<AudioClip, AudioClip>();
         private GameController _subscribedController;
         private bool _hasObservedPhase;
+
+        // Esc で途中終了したときはリザルトのボイスの代わりにリタイアのボイスを流す
+        private bool _isRetiring;
+        private AudioClip _pendingResultVoice;
         private GamePhase _lastPhase;
         // 減算時に「0のまま」だったかを判定するため、直前のカウントを覚えておく
         private int _lastPlayerCount;
@@ -179,6 +196,7 @@ namespace Taurus.Runtime.Game
             _subscribedController.OnPendulumTopCrossed += HandlePendulumTopCrossed;
             _subscribedController.OnWaveSucceeded += HandleWaveSucceeded;
             _subscribedController.OnGameFinished += HandleGameFinished;
+            _subscribedController.OnRunRetired += HandleRunRetired;
 
             // 既に初期フェーズへ遷移済みの場合もBGMが鳴るように現在状態を同期する
             _lastPhase = _subscribedController.CurrentPhase;
@@ -200,6 +218,7 @@ namespace Taurus.Runtime.Game
             _subscribedController.OnPendulumTopCrossed -= HandlePendulumTopCrossed;
             _subscribedController.OnWaveSucceeded -= HandleWaveSucceeded;
             _subscribedController.OnGameFinished -= HandleGameFinished;
+            _subscribedController.OnRunRetired -= HandleRunRetired;
             _subscribedController = null;
             _hasObservedPhase = false;
         }
@@ -211,6 +230,12 @@ namespace Taurus.Runtime.Game
                 if (_lastPhase == GamePhase.Rules && phase == GamePhase.Playing)
                 {
                     PlaySe(_gameStartClip);
+                    PlayVoice(_startVoiceClip);
+                }
+                else if (_lastPhase == GamePhase.Result && phase == GamePhase.Playing)
+                {
+                    // リザルトからのリトライもゲーム開始として声を出す
+                    PlayVoice(_startVoiceClip);
                 }
                 else if (_lastPhase == GamePhase.Result && phase == GamePhase.Title)
                 {
@@ -285,6 +310,7 @@ namespace Taurus.Runtime.Game
         private void HandleWaveSucceeded(int expectedCount, int nextWave)
         {
             PlaySe(_waveSuccessClip);
+            PlayVoice(_waveClearVoiceClip);
         }
 
         private void HandleGameFinished(int clearedWaves, int expectedCount, int playerCount, IReadOnlyList<int> records)
@@ -292,12 +318,44 @@ namespace Taurus.Runtime.Game
             PlayBgm(SelectResultBgm(clearedWaves));
             PlaySe(_gameOverClip);
 
+            // リタイアならリタイアの声、そうでなければトップ3に入ったかで声を変える（ゲームオーバー音の少し後）
+            _pendingResultVoice = _isRetiring
+                ? _retireVoiceClip
+                : (IsTopRecord(clearedWaves, records) ? _resultRankInVoiceClip : _resultRankOutVoiceClip);
+            _isRetiring = false;
+            CancelInvoke(nameof(PlayPendingResultVoice));
+            Invoke(nameof(PlayPendingResultVoice), Mathf.Max(0f, _resultVoiceDelaySeconds));
+
             // 今回の記録がトップ3に入っていれば、ゲームオーバー音の後に新記録ジングルを鳴らす
             if (IsTopRecord(clearedWaves, records))
             {
                 CancelInvoke(nameof(PlayRecordHigh));
                 Invoke(nameof(PlayRecordHigh), Mathf.Max(0f, _recordHighDelaySeconds));
             }
+        }
+
+        private void HandleRunRetired()
+        {
+            _isRetiring = true;
+        }
+
+        private void PlayPendingResultVoice()
+        {
+            PlayVoice(_pendingResultVoice);
+            _pendingResultVoice = null;
+        }
+
+        // ボイスは SE と同じ出力に、ボイス用の音量で重ねて鳴らす（冒頭の無音は SE と同じく詰める）
+        private void PlayVoice(AudioClip clip)
+        {
+            AudioSource source = ResolveAudioSource(_seAudioGroup, _seSource);
+            if (source == null || clip == null)
+            {
+                return;
+            }
+
+            AudioClip playable = _autoTrimLeadingSilence ? GetOrCreateTrimmedClip(clip) : clip;
+            source.PlayOneShot(playable, Mathf.Clamp(_voiceVolumeScale, 0f, 1.5f));
         }
 
         private void PlayRecordHigh()

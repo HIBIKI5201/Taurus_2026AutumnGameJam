@@ -8099,6 +8099,13 @@ MonoBehaviour:
   _waveStartClip: {fileID: 8300000, guid: 6e864d0856a07152ab0130a95b7f1b7f, type: 3}
   _countFloorClip: {fileID: 8300000, guid: 8c53d5a99b4472dbc617c2ddb807777e, type: 3}
   _recordHighClip: {fileID: 8300000, guid: 7ef25affeae34c4ef17ec14761847fc8, type: 3}
+  _startVoiceClip: {fileID: 8300000, guid: 0f8e33f270414979a7664c91486db580, type: 3}
+  _waveClearVoiceClip: {fileID: 8300000, guid: 5460ef5efa5349fba7ded3faee56802c, type: 3}
+  _retireVoiceClip: {fileID: 8300000, guid: b3247682025d4f51ac9f3ab44ed39586, type: 3}
+  _resultRankInVoiceClip: {fileID: 8300000, guid: 4f64ee6d81a040eab7de8f87946e921b, type: 3}
+  _resultRankOutVoiceClip: {fileID: 8300000, guid: 188a8467385e42f482d004a99b991552, type: 3}
+  _voiceVolumeScale: 1
+  _resultVoiceDelaySeconds: 0.6
   _recordHighDelaySeconds: 1
   _titleBgmClip: {fileID: 8300000, guid: 2381d900e20ec3a42a0133a8562de97d, type: 3}
   _gameBgmClip: {fileID: 8300000, guid: 44387851a1666c64da3acc254ac7b28b, type: 3}
