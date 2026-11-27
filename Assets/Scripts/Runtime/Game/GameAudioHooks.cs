@@ -51,8 +51,14 @@ namespace Taurus.Runtime.Game
         [Header("Audio Mixer（BGM / SE / Voice）")]
         [SerializeField] private AudioMixer _mixer;
 
+        // Master グループの音量として公開したパラメーター名
+        [SerializeField] private string _masterVolumeParameter = "MasterVolume";
+
         // BGM グループの音量として公開したパラメーター名
         [SerializeField] private string _bgmVolumeParameter = "BGMVolume";
+
+        [Tooltip("WebGL ビルド時の全体音量倍率（0.6 = 40% 減）")]
+        [SerializeField, Range(0f, 1f)] private float _webGlMasterVolumeScale = 0.6f;
 
         [Tooltip("ボイスが鳴っている間、BGM をどれだけ下げるか（dB）")]
         [SerializeField, Range(-30f, 0f)] private float _voiceDuckDb = -8f;
@@ -106,9 +112,26 @@ namespace Taurus.Runtime.Game
         // 減算時に「0のまま」だったかを判定するため、直前のカウントを覚えておく
         private int _lastPlayerCount;
 
+        private void Awake()
+        {
+            ApplyWebGlMasterVolume();
+        }
+
         private void OnEnable()
         {
             ResolveAndBindGameController();
+        }
+
+        // WebGL 版は音量が大きく聞こえやすいため全体音量を下げる。
+        // Unity WebGL の Web Audio API バックエンドでは AudioMixer.SetFloat が効かないため、
+        // WebGL 実機では AudioListener.volume 経由でマスター音量を確実に下げ、
+        // 非 WebGL 環境で AudioMixer を使う場合も MasterVolume パラメーターを参照できる構成にしている。
+        private void ApplyWebGlMasterVolume()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            float scale = Mathf.Clamp01(_webGlMasterVolumeScale);
+            AudioListener.volume = scale;
+#endif
         }
 
         private void OnDisable()
