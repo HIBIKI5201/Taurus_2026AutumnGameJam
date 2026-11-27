@@ -38,7 +38,8 @@ namespace Taurus.Runtime.Game
         [SerializeField] private AudioClip _startVoiceClip;         // ゲーム開始（ルール説明から・リトライ）
         [SerializeField] private AudioClip _waveClearVoiceClip;     // Wave 正解（次のステージに行く前）
         [SerializeField] private AudioClip _retireVoiceClip;        // Esc で途中終了したとき
-        [SerializeField] private AudioClip _resultRankInVoiceClip;  // リザルト：トップ3に入ったとき
+        [SerializeField] private AudioClip _resultRank1VoiceClip;   // リザルト：ランキング1位になったとき
+        [SerializeField] private AudioClip _resultRank2To3VoiceClip;// リザルト：ランキング2位・3位に入ったとき
         [SerializeField] private AudioClip _resultRankOutVoiceClip; // リザルト：ランキングに入らなかったとき
 
         [Tooltip("ボイスの再生音量倍率")]
@@ -318,10 +319,8 @@ namespace Taurus.Runtime.Game
             PlayBgm(SelectResultBgm(clearedWaves));
             PlaySe(_gameOverClip);
 
-            // リタイアならリタイアの声、そうでなければトップ3に入ったかで声を変える（ゲームオーバー音の少し後）
-            _pendingResultVoice = _isRetiring
-                ? _retireVoiceClip
-                : (IsTopRecord(clearedWaves, records) ? _resultRankInVoiceClip : _resultRankOutVoiceClip);
+            // リタイアならリタイアの声、そうでなければ今回の順位で声を変える（ゲームオーバー音の少し後）
+            _pendingResultVoice = _isRetiring ? _retireVoiceClip : SelectResultVoice(clearedWaves, records);
             _isRetiring = false;
             CancelInvoke(nameof(PlayPendingResultVoice));
             Invoke(nameof(PlayPendingResultVoice), Mathf.Max(0f, _resultVoiceDelaySeconds));
@@ -331,6 +330,36 @@ namespace Taurus.Runtime.Game
             {
                 CancelInvoke(nameof(PlayRecordHigh));
                 Invoke(nameof(PlayRecordHigh), Mathf.Max(0f, _recordHighDelaySeconds));
+            }
+        }
+
+        // 今回のクリア数がトップ3の何位に入ったか（1〜3）。入っていなければ 0
+        public static int GetRecordRank(int clearedWaves, IReadOnlyList<int> records)
+        {
+            if (clearedWaves <= 0 || records == null)
+            {
+                return 0;
+            }
+
+            for (int i = 0; i < records.Count && i < 3; i++)
+            {
+                if (records[i] == clearedWaves)
+                {
+                    return i + 1;
+                }
+            }
+
+            return 0;
+        }
+
+        private AudioClip SelectResultVoice(int clearedWaves, IReadOnlyList<int> records)
+        {
+            switch (GetRecordRank(clearedWaves, records))
+            {
+                case 1: return _resultRank1VoiceClip;
+                case 2:
+                case 3: return _resultRank2To3VoiceClip;
+                default: return _resultRankOutVoiceClip;
             }
         }
 

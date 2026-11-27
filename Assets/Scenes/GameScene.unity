@@ -8102,7 +8102,8 @@ MonoBehaviour:
   _startVoiceClip: {fileID: 8300000, guid: 0f8e33f270414979a7664c91486db580, type: 3}
   _waveClearVoiceClip: {fileID: 8300000, guid: 5460ef5efa5349fba7ded3faee56802c, type: 3}
   _retireVoiceClip: {fileID: 8300000, guid: b3247682025d4f51ac9f3ab44ed39586, type: 3}
-  _resultRankInVoiceClip: {fileID: 8300000, guid: 4f64ee6d81a040eab7de8f87946e921b, type: 3}
+  _resultRank1VoiceClip: {fileID: 8300000, guid: 91a77ff8958b43429432fa3f811945a7, type: 3}
+  _resultRank2To3VoiceClip: {fileID: 8300000, guid: aba6062291e84110a72b75c618d3cca4, type: 3}
   _resultRankOutVoiceClip: {fileID: 8300000, guid: 188a8467385e42f482d004a99b991552, type: 3}
   _voiceVolumeScale: 1
   _resultVoiceDelaySeconds: 0.6
