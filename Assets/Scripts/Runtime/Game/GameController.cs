@@ -28,6 +28,9 @@ namespace Taurus.Runtime.Game
         /// プレイ中に連打していた Space でリザルトを読み飛ばさないための猶予。 </summary>
         public const float RESULT_INPUT_DELAY_SECONDS = 0.5f;
 
+        /// <summary> リザルト画面のリプレイを1回見せ終えてから、最初に戻すまでの秒数。 </summary>
+        public const float REPLAY_LOOP_PAUSE_SECONDS = 1.5f;
+
         /// <summary> タイトル画面からルール画面へ進むのに必要な Space 押下回数。 </summary>
         public const int TITLE_REQUIRED_PRESSES = 1;
 
@@ -77,6 +80,15 @@ namespace Taurus.Runtime.Game
         // アウトゲーム画面が消えるのを待ってから Wave 1 を始めるまでの間 true（二重開始を防ぐ）
         private bool _isStartingRun;
 
+        // リザルト画面で、失敗したWaveを繰り返し再生している間 true
+        private bool _isReplaying;
+
+        // リプレイの経過秒数（Wave と同じく最初の1秒は静止、その後8秒の計画モーション、2秒の減衰）
+        private float _replayElapsedSeconds;
+
+        // リプレイ中に真上を通過した回数（＝答えのカウンター）
+        private int _replayCount;
+
         // リザルト画面に入った時刻（Time.unscaledTime）。入力猶予の判定に使う
         private float _resultEnteredTime;
 
@@ -109,6 +121,9 @@ namespace Taurus.Runtime.Game
 
         /// <summary> いずれかの振り子が真上を通過したときに発行される（振り子, 子玉か, 通過回数）。 </summary>
         public event Action<PendulumMotion, bool, int> OnPendulumTopCrossed;
+
+        /// <summary> リザルト画面のリプレイで、答えのカウントが変わったときに発行される（リプレイ中の通過数, 正解数）。 </summary>
+        public event Action<int, int> OnReplayCountChanged;
 
         /// <summary> 現在のゲーム状態。 </summary>
         public GamePhase CurrentPhase => _currentPhase;
@@ -252,6 +267,12 @@ namespace Taurus.Runtime.Game
 
         private void Update()
         {
+            if (_currentPhase == GamePhase.Result && _isReplaying)
+            {
+                UpdateReplay(Time.unscaledDeltaTime);
+                return;
+            }
+
             if (_currentPhase != GamePhase.Playing)
             {
                 return;
@@ -671,6 +692,43 @@ namespace Taurus.Runtime.Game
             int clearedWaves = Mathf.Max(0, _currentWave - 1);
             IReadOnlyList<int> updatedRecords = _recordStore.RecordScoreAndSave(clearedWaves, this.GetCancellationTokenOnDestroy());
             OnGameFinished?.Invoke(clearedWaves, _expectedCount, _playerCount, updatedRecords);
+            StartReplay();
+        }
+
+        // 失敗したWaveの振り子を同じスケジュールで最初から動かし直す。答えのカウンターも0から数え直す
+        private void StartReplay()
+        {
+            _isReplaying = _activePendulums.Count > 0;
+            _replayElapsedSeconds = 0f;
+            _replayCount = 0;
+
+            float now = Time.unscaledTime;
+            for (int i = 0; i < _activePendulums.Count; i++)
+            {
+                PendulumMotion pendulum = _activePendulums[i];
+                pendulum.Initialize(pendulum.PendulumIndex, pendulum.ParentSchedule, pendulum.ChildSchedule, now, pendulum.GrandchildSchedule);
+            }
+
+            OnReplayCountChanged?.Invoke(_replayCount, _expectedCount);
+        }
+
+        private void UpdateReplay(float dt)
+        {
+            _replayElapsedSeconds += dt;
+
+            // 1回分を見せ終えたら、答えを読める間を置いてから最初に戻して繰り返す
+            if (_replayElapsedSeconds >= WAVE_DURATION_SECONDS + REPLAY_LOOP_PAUSE_SECONDS)
+            {
+                StartReplay();
+                return;
+            }
+
+            float elapsed = Mathf.Min(_replayElapsedSeconds, WAVE_DURATION_SECONDS);
+            float now = Time.unscaledTime;
+            for (int i = 0; i < _activePendulums.Count; i++)
+            {
+                _activePendulums[i].EvaluateAt(elapsed, _replayElapsedSeconds <= WAVE_DURATION_SECONDS ? dt : 0f, now);
+            }
         }
 
         private StageLoader ResolveStageLoader()
@@ -730,6 +788,11 @@ namespace Taurus.Runtime.Game
 
         private void SetPhase(GamePhase nextPhase)
         {
+            if (nextPhase != GamePhase.Result)
+            {
+                _isReplaying = false;
+            }
+
             _currentPhase = nextPhase;
             OnPhaseChanged?.Invoke(_currentPhase);
         }
@@ -760,6 +823,12 @@ namespace Taurus.Runtime.Game
         private void HandlePendulumTopCrossed(PendulumMotion pendulum, bool isChild, int crossedCount)
         {
             OnPendulumTopCrossed?.Invoke(pendulum, isChild, crossedCount);
+
+            if (_currentPhase == GamePhase.Result && _isReplaying)
+            {
+                _replayCount++;
+                OnReplayCountChanged?.Invoke(_replayCount, _expectedCount);
+            }
         }
     }
 }
