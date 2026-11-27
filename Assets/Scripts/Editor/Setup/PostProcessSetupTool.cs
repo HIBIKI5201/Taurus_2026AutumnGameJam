@@ -61,6 +61,14 @@ namespace Taurus.Editor.Setup
             UnityEngine.Debug.Log($"[{nameof(PostProcessSetupTool)}] Global Volume（Bloom / Tonemapping / Vignette）と Main Camera の Post Processing を設定しました。");
         }
 
+        /// <summary> VolumeProfile の Bloom / Tonemapping / Vignette をサブアセット込みで作り直して保存する（シーンは触らない）。 </summary>
+        [MenuItem("Taurus/Repair Post Processing Profile")]
+        public static void RepairVolumeProfile()
+        {
+            EnsureVolumeProfile();
+            UnityEngine.Debug.Log($"[{nameof(PostProcessSetupTool)}] {VOLUME_PROFILE_PATH} の Bloom / Tonemapping / Vignette を保存し直しました。");
+        }
+
         private static VolumeProfile EnsureVolumeProfile()
         {
             VolumeProfile profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(VOLUME_PROFILE_PATH);
@@ -69,6 +77,9 @@ namespace Taurus.Editor.Setup
                 profile = ScriptableObject.CreateInstance<VolumeProfile>();
                 AssetDatabase.CreateAsset(profile, VOLUME_PROFILE_PATH);
             }
+
+            // 以前サブアセットとして保存されずに空参照（fileID: 0）になった要素を取り除く
+            profile.components.RemoveAll(component => component == null);
 
             // Bloom（Emission HDR > 1.0 の発光玉を綺麗に光らせる）
             if (!profile.TryGet(out Bloom bloom))
@@ -100,6 +111,12 @@ namespace Taurus.Editor.Setup
             vignette.intensity.Override(0.18f);
             vignette.smoothness.Override(0.45f);
 
+            // VolumeProfile.Add で作った要素はメモリ上にしか無いので、プロファイルのサブアセットとして埋め込まないと
+            // 保存時に空参照になり、Bloom などが一切掛からなくなる
+            EmbedAsSubAsset(bloom, profile);
+            EmbedAsSubAsset(tonemapping, profile);
+            EmbedAsSubAsset(vignette, profile);
+
             EditorUtility.SetDirty(bloom);
             EditorUtility.SetDirty(tonemapping);
             EditorUtility.SetDirty(vignette);
@@ -107,6 +124,17 @@ namespace Taurus.Editor.Setup
             AssetDatabase.SaveAssets();
 
             return profile;
+        }
+
+        private static void EmbedAsSubAsset(VolumeComponent component, VolumeProfile profile)
+        {
+            if (AssetDatabase.Contains(component))
+            {
+                return;
+            }
+
+            component.hideFlags = HideFlags.HideInInspector | HideFlags.HideInHierarchy;
+            AssetDatabase.AddObjectToAsset(component, profile);
         }
     }
 }

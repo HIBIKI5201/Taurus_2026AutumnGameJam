@@ -51,6 +51,8 @@ namespace Taurus.Runtime.UI
         [SerializeField] private Image _startMeterFill; // Image.Type = Filled（Horizontal）を想定
         [SerializeField] private Button _titleStartButton;
         [SerializeField] private Button _quitButton;
+        [SerializeField] private Button _creditsButton;
+        [SerializeField] private CreditsPanel _creditsPanel;
 
         [Header("Rules UI")]
         [SerializeField] private Button _rulesStartButton;
@@ -63,6 +65,9 @@ namespace Taurus.Runtime.UI
         [SerializeField] private Button _plusButton;
         [SerializeField] private Button _minusButton;
 
+        // インゲームの少女の立ち絵（ボタンを押すたびにコマ送りで動く）
+        [SerializeField] private CharacterPortrait _characterPortrait;
+
         [Header("Result UI")]
         [SerializeField] private Text _clearedWavesText;
         [SerializeField] private Text _resultDetailText;
@@ -70,6 +75,15 @@ namespace Taurus.Runtime.UI
         [SerializeField] private Color _clearedWavesColor = new Color(0.29f, 0.63f, 0.76f, 1f);
         [SerializeField] private Text[] _recordValueTexts; // 要素0=1ST, 1=2ND, 2=3RD
         [SerializeField] private Button _retryButton;
+
+        // リザルト画面左の大きな立ち絵と、ランキング更新時・非更新時の表情差分
+        [SerializeField] private Image _resultCharacterImage;
+        [SerializeField] private Sprite _resultRankUpdatedSprite;
+        [SerializeField] private Sprite _resultRankNotUpdatedSprite;
+
+        // リザルト画面中央の、リプレイに合わせて数え上がる答えのカウンター
+        [SerializeField] private Text _replayCountText;
+        [SerializeField] private RectTransform _replayCounterRoot;
         [SerializeField] private Button _homeButton;
 
         [Header("Wave Transition Fade（UIの背面に描画しUIを隠さない暗転）")]
@@ -85,6 +99,7 @@ namespace Taurus.Runtime.UI
         private float _feedbackHideTimer;
         private MotionHandle _waveFadeMotionHandle;
         private MotionHandle _popMotionHandle;
+        private MotionHandle _replayPopMotionHandle;
         private ButtonPressEffect _plusPressEffect;
         private ButtonPressEffect _minusPressEffect;
         private readonly Dictionary<GameObject, MotionHandle> _panelMotionHandles = new Dictionary<GameObject, MotionHandle>();
@@ -125,6 +140,7 @@ namespace Taurus.Runtime.UI
         {
             CancelWaveFadeMotion();
             CancelPopMotion();
+            CancelReplayPopMotion();
             CancelPanelMotions();
             UnbindGameController();
             ServiceLocator.UnregisterInstance(this);
@@ -201,6 +217,16 @@ namespace Taurus.Runtime.UI
                 _minusPressEffect = _minusButton.GetComponent<ButtonPressEffect>();
             }
 
+            if (_creditsButton != null)
+            {
+                _creditsButton.onClick.AddListener(HandleCreditsClicked);
+            }
+
+            if (_creditsPanel != null)
+            {
+                _creditsPanel.OnVisibilityChanged += HandleCreditsVisibilityChanged;
+            }
+
             if (_quitButton != null)
             {
                 _quitButton.onClick.AddListener(HandleQuitClicked);
@@ -261,6 +287,7 @@ namespace Taurus.Runtime.UI
             _subscribedController.OnPlayerCountChanged += HandlePlayerCountChanged;
             _subscribedController.OnWaveSucceeded += HandleWaveSucceeded;
             _subscribedController.OnGameFinished += HandleGameFinished;
+            _subscribedController.OnReplayCountChanged += HandleReplayCountChanged;
 
             SyncInitialState();
         }
@@ -279,6 +306,7 @@ namespace Taurus.Runtime.UI
             _subscribedController.OnPlayerCountChanged -= HandlePlayerCountChanged;
             _subscribedController.OnWaveSucceeded -= HandleWaveSucceeded;
             _subscribedController.OnGameFinished -= HandleGameFinished;
+            _subscribedController.OnReplayCountChanged -= HandleReplayCountChanged;
             _subscribedController = null;
         }
 
@@ -521,6 +549,11 @@ namespace Taurus.Runtime.UI
 
         private void HandleWaveStarted(int wave)
         {
+            if (_characterPortrait != null)
+            {
+                _characterPortrait.ShowIdle();
+            }
+
             if (_waveText != null)
             {
                 _waveText.text = $"WAVE {wave:00}";
@@ -560,10 +593,21 @@ namespace Taurus.Runtime.UI
             {
                 _minusPressEffect.Play();
             }
+
+            // 立ち絵もボタンを押すたびに「カチッ」とコマ送りで動かす
+            if (delta != 0 && _characterPortrait != null)
+            {
+                _characterPortrait.PlayClick();
+            }
         }
 
         private void HandleWaveSucceeded(int expectedCount, int nextWave)
         {
+            if (_characterPortrait != null)
+            {
+                _characterPortrait.ShowClear();
+            }
+
             // 上部バナーと下部テキストの視線分散を防ぐため、_successBanner がある場合はバナー側へ表示を統一する
             Text bannerText = _successBanner != null ? _successBanner.GetComponentInChildren<Text>(true) : null;
             if (bannerText != null)
@@ -587,6 +631,16 @@ namespace Taurus.Runtime.UI
         private void HandleGameFinished(int clearedWaves, int expectedCount, int playerCount, IReadOnlyList<int> records)
         {
             bool isNewTopRecord = GameAudioHooks.IsTopRecord(clearedWaves, records);
+
+            // ランキング（トップ3）を更新できたかで、リザルトの立ち絵の表情を変える
+            if (_resultCharacterImage != null)
+            {
+                Sprite resultSprite = isNewTopRecord ? _resultRankUpdatedSprite : _resultRankNotUpdatedSprite;
+                if (resultSprite != null)
+                {
+                    _resultCharacterImage.sprite = resultSprite;
+                }
+            }
 
             if (_clearedWavesText != null)
             {
@@ -645,6 +699,41 @@ namespace Taurus.Runtime.UI
             }
 
             return isNewRecord ? $"★ NEW RECORD ★  {rank}" : rank;
+        }
+
+        // リプレイで真上を通過するたびに答えのカウンターを進め、数字を弾ませる
+        private void HandleReplayCountChanged(int replayCount, int expectedCount)
+        {
+            if (_replayCountText != null)
+            {
+                _replayCountText.text = replayCount.ToString("00");
+            }
+
+            if (replayCount <= 0 || _replayCounterRoot == null)
+            {
+                return;
+            }
+
+            CancelReplayPopMotion();
+            _replayCounterRoot.localScale = Vector3.one * 1.18f;
+            _replayPopMotionHandle = LMotion.Create(1.18f, 1f, 0.25f)
+                .WithEase(Ease.OutBack)
+                .WithScheduler(MotionScheduler.UpdateIgnoreTimeScale)
+                .Bind(_replayCounterRoot, static (scale, tr) =>
+                {
+                    if (tr != null)
+                    {
+                        tr.localScale = Vector3.one * scale;
+                    }
+                });
+        }
+
+        private void CancelReplayPopMotion()
+        {
+            if (_replayPopMotionHandle.IsActive())
+            {
+                _replayPopMotionHandle.Cancel();
+            }
         }
 
         private void PlayScalePop(Transform target, float startScale, float duration)
@@ -815,6 +904,26 @@ namespace Taurus.Runtime.UI
         private void HandleMinusButtonClicked()
         {
             ActiveController?.HandleCtrlInput();
+        }
+
+        private void HandleCreditsClicked()
+        {
+            ButtonPressEffect effect = _creditsButton.GetComponent<ButtonPressEffect>();
+            if (effect != null)
+            {
+                effect.Play();
+            }
+
+            _creditsPanel.Open();
+        }
+
+        // クレジット画面を開いている間は、裏のタイトル画面がキー入力で進まないようにする
+        private void HandleCreditsVisibilityChanged(bool isOpen)
+        {
+            if (ActiveController != null)
+            {
+                ActiveController.SetOverlayOpen(isOpen);
+            }
         }
 
         private void HandleQuitClicked()
