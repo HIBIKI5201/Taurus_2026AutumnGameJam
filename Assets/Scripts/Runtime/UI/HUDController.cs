@@ -65,6 +65,9 @@ namespace Taurus.Runtime.UI
         [SerializeField] private Button _plusButton;
         [SerializeField] private Button _minusButton;
 
+        // インゲームの少女の立ち絵（ボタンを押すたびにコマ送りで動く）
+        [SerializeField] private CharacterPortrait _characterPortrait;
+
         [Header("Result UI")]
         [SerializeField] private Text _clearedWavesText;
         [SerializeField] private Text _resultDetailText;
@@ -541,6 +544,11 @@ namespace Taurus.Runtime.UI
 
         private void HandleWaveStarted(int wave)
         {
+            if (_characterPortrait != null)
+            {
+                _characterPortrait.ShowIdle();
+            }
+
             if (_waveText != null)
             {
                 _waveText.text = $"WAVE {wave:00}";
@@ -580,10 +588,21 @@ namespace Taurus.Runtime.UI
             {
                 _minusPressEffect.Play();
             }
+
+            // 立ち絵もボタンを押すたびに「カチッ」とコマ送りで動かす
+            if (delta != 0 && _characterPortrait != null)
+            {
+                _characterPortrait.PlayClick();
+            }
         }
 
         private void HandleWaveSucceeded(int expectedCount, int nextWave)
         {
+            if (_characterPortrait != null)
+            {
+                _characterPortrait.ShowClear();
+            }
+
             // 上部バナーと下部テキストの視線分散を防ぐため、_successBanner がある場合はバナー側へ表示を統一する
             Text bannerText = _successBanner != null ? _successBanner.GetComponentInChildren<Text>(true) : null;
             if (bannerText != null)
