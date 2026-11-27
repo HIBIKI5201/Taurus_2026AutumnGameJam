@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Taurus.Runtime.UI;
+using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -459,6 +460,72 @@ namespace Taurus.Editor.Setup
 
             AssetDatabase.SaveAssets();
             Debug.Log($"[{nameof(ApplyUiFontsAndLogoTool)}] 完成UIデータ一括反映完了（UISkin_WIP & GameScene）");
+        }
+
+        [MenuItem("Taurus/Fix Result Retry UI")]
+        public static void FixResultRetryUi()
+        {
+            bool wasLoaded = EditorSceneManager.GetSceneByPath(GAME_SCENE_PATH).isLoaded;
+            Scene scene = wasLoaded
+                ? EditorSceneManager.GetSceneByPath(GAME_SCENE_PATH)
+                : EditorSceneManager.OpenScene(GAME_SCENE_PATH, OpenSceneMode.Additive);
+
+            Transform canvas = FindChildByName(scene, "Canvas");
+            Transform resultPanel = canvas != null ? canvas.Find("ResultPanel") : null;
+            if (resultPanel == null)
+            {
+                Debug.LogError($"[{nameof(ApplyUiFontsAndLogoTool)}] ResultPanel が見つかりません。");
+                return;
+            }
+
+            // 1. 右タブ下段の楕円枠（unity_y = -111 〜 -264, 中心 -188）へ RetryButton / HomeButton を精密配置
+            FixResultActionButton(resultPanel.Find("RetryButton"), new Vector2(660f, -188f));
+            FixResultActionButton(resultPanel.Find("HomeButton"), new Vector2(830f, -188f));
+
+            // 2. 右タブ上段（TOP3 RECORDS 帯 + 枠 unity_y = +260 〜 +53）へ表彰台スコアを精密配置
+            SetRect(resultPanel.Find("RecordsFrame"), new Vector2(745f, 250f), new Vector2(340f, 204f));
+            SetRect(resultPanel.Find("RecordValue_1"), new Vector2(745f, 180f), new Vector2(110f, 56f));
+            SetRect(resultPanel.Find("RecordValue_2"), new Vector2(648f, 120f), new Vector2(110f, 56f));
+            SetRect(resultPanel.Find("RecordValue_3"), new Vector2(842f, 120f), new Vector2(110f, 56f));
+            SetTextSize(resultPanel.Find("RecordValue_1"), 48);
+            SetTextSize(resultPanel.Find("RecordValue_2"), 46);
+            SetTextSize(resultPanel.Find("RecordValue_3"), 46);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            if (!wasLoaded)
+            {
+                EditorSceneManager.CloseScene(scene, true);
+            }
+
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[{nameof(ApplyUiFontsAndLogoTool)}] ResultPanel のリトライ/タイトルボタンおよびTOP3配置を精密修正完了");
+        }
+
+        private static void FixResultActionButton(Transform btn, Vector2 pos)
+        {
+            if (btn == null)
+            {
+                return;
+            }
+
+            SetRect(btn, pos, new Vector2(150f, 148f));
+            SetRect(btn.Find("Icon"), new Vector2(0f, 26f), new Vector2(66f, 66f));
+            SetRect(btn.Find("Label"), new Vector2(0f, -24f), new Vector2(145f, 30f));
+            SetTextSize(btn.Find("Label"), 20);
+
+            Transform keyIcon = btn.Find("KeyIcon");
+            if (keyIcon != null)
+            {
+                SetRect(keyIcon, new Vector2(0f, -54f), new Vector2(120f, 32f));
+                TMP_Text tmp = keyIcon.GetComponent<TMP_Text>();
+                if (tmp != null)
+                {
+                    tmp.alignment = TextAlignmentOptions.Center;
+                    tmp.fontSize = 24f;
+                    EditorUtility.SetDirty(tmp);
+                }
+            }
         }
 
         private static Sprite LoadMainSprite(string assetPath)
