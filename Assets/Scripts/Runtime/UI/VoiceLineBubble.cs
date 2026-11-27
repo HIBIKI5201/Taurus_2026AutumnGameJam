@@ -24,6 +24,16 @@ namespace Taurus.Runtime.UI
         [SerializeField, Min(0f)] private float _extraHoldSeconds = 0.4f;
         [SerializeField, Min(0.01f)] private float _fadeSeconds = 0.15f;
 
+        // 9-slice 吹き出しを文字数・テキストサイズに合わせて自動リサイズする設定
+        [SerializeField] private bool _autoResizeToText = true;
+        [SerializeField, Min(0f)] private float _horizontalPadding = 84f;
+        [SerializeField, Min(0f)] private float _verticalPadding = 28f;
+        [SerializeField, Min(0f)] private float _minWidth = 180f;
+        [SerializeField, Min(0f)] private float _maxWidth = 760f;
+        [SerializeField, Min(0f)] private float _minHeight = 88f;
+        [SerializeField, Min(0f)] private float _maxHeight = 168f;
+
+        private RectTransform _rectTransform;
         private CanvasGroup _group;
         private Vector3 _baseScale;
         private float _hideAt;
@@ -33,6 +43,7 @@ namespace Taurus.Runtime.UI
 
         private void Awake()
         {
+            _rectTransform = transform as RectTransform;
             _group = GetComponent<CanvasGroup>();
             _baseScale = transform.localScale;
             HideImmediate();
@@ -77,6 +88,11 @@ namespace Taurus.Runtime.UI
             }
 
             _lineText.text = line;
+            if (_autoResizeToText)
+            {
+                ResizeToFitText(line);
+            }
+
             float displaySeconds = CalculateDisplaySeconds(line, voiceSeconds);
             _hideAt = Time.unscaledTime + displaySeconds;
             _isShowing = true;
@@ -95,6 +111,32 @@ namespace Taurus.Runtime.UI
                     self.transform.localScale = self._baseScale * Mathf.LerpUnclamped(0.85f, 1f, t);
                     self._group.alpha = Mathf.Clamp01(t * 2f);
                 });
+        }
+
+        private void ResizeToFitText(string line)
+        {
+            if (_rectTransform == null)
+            {
+                _rectTransform = transform as RectTransform;
+                if (_rectTransform == null)
+                {
+                    return;
+                }
+            }
+
+            float maxWidth = Mathf.Max(_minWidth, _maxWidth);
+            float maxHeight = Mathf.Max(_minHeight, _maxHeight);
+            float maxTextWidth = Mathf.Max(40f, maxWidth - _horizontalPadding);
+
+            if (_lineText.enableAutoSizing)
+            {
+                _lineText.fontSize = _lineText.fontSizeMax;
+            }
+
+            Vector2 preferred = _lineText.GetPreferredValues(line, maxTextWidth, Mathf.Infinity);
+            float targetWidth = Mathf.Clamp(preferred.x + _horizontalPadding, _minWidth, maxWidth);
+            float targetHeight = Mathf.Clamp(preferred.y + _verticalPadding, _minHeight, maxHeight);
+            _rectTransform.sizeDelta = new Vector2(targetWidth, targetHeight);
         }
 
         private float CalculateDisplaySeconds(string line, float voiceSeconds)
