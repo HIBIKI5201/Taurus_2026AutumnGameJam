@@ -11,7 +11,7 @@ using UnityEngine.UI;
 namespace Taurus.Develop.Debug
 {
     /// <summary>
-    /// Fキーでゲーム進行を止めずに表示切替できる開発・QA用デバッグオーバーレイ。
+    /// CTRL + D キーでゲーム進行を止めずに表示切替できる開発・QA用デバッグオーバーレイ。
     /// 各玉の「実測通過数 / 予定通過数」「角度（度）」「高さ h = -cos(θ)」「向き」「直近TOP通過（0.35秒）」
     /// および「Wave時刻」「32bit乱数シード」を表示し、8秒時点で実測と予定が食い違えば赤色で強調する。
     /// </summary>
@@ -30,7 +30,7 @@ namespace Taurus.Develop.Debug
 
         private void Awake()
         {
-            // 起動時は非表示にしておき、Fキーで開閉する
+            // 起動時は非表示にしておき、CTRL + D キーで開閉する
             SetVisible(false);
         }
 
@@ -124,7 +124,7 @@ namespace Taurus.Develop.Debug
             }
 
             _builder.Clear();
-            _builder.AppendLine("DEBUG / Fで閉じる");
+            _builder.AppendLine("DEBUG / CTRL+Dで閉じる");
             _builder.Append("PHASE: ").Append(_gameController.CurrentPhase)
                 .Append("  WAVE: ").Append(_gameController.CurrentWave)
                 .Append("  T: ").Append(_gameController.WaveElapsedSeconds.ToString("0.00")).Append("s")

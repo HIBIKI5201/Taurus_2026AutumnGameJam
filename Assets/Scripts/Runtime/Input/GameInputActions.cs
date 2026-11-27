@@ -189,15 +189,70 @@ namespace Taurus.Runtime.Input
             ],
             ""bindings"": [
                 {
-                    ""name"": """",
+                    ""name"": ""LeftCtrl+D"",
                     ""id"": ""c2a5c97b-3c6d-4a3e-9a5e-3f7a2b8d3c05"",
-                    ""path"": ""<Keyboard>/f"",
+                    ""path"": ""OneModifier"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""ToggleOverlay"",
+                    ""isComposite"": true,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": ""modifier"",
+                    ""id"": ""c2a5c97b-3c6d-4a3e-9a5e-3f7a2b8d3c06"",
+                    ""path"": ""<Keyboard>/leftCtrl"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": ""Keyboard&Mouse"",
                     ""action"": ""ToggleOverlay"",
                     ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""binding"",
+                    ""id"": ""c2a5c97b-3c6d-4a3e-9a5e-3f7a2b8d3c07"",
+                    ""path"": ""<Keyboard>/d"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": ""Keyboard&Mouse"",
+                    ""action"": ""ToggleOverlay"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""RightCtrl+D"",
+                    ""id"": ""c2a5c97b-3c6d-4a3e-9a5e-3f7a2b8d3c08"",
+                    ""path"": ""OneModifier"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""ToggleOverlay"",
+                    ""isComposite"": true,
                     ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": ""modifier"",
+                    ""id"": ""c2a5c97b-3c6d-4a3e-9a5e-3f7a2b8d3c09"",
+                    ""path"": ""<Keyboard>/rightCtrl"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": ""Keyboard&Mouse"",
+                    ""action"": ""ToggleOverlay"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
+                },
+                {
+                    ""name"": ""binding"",
+                    ""id"": ""c2a5c97b-3c6d-4a3e-9a5e-3f7a2b8d3c10"",
+                    ""path"": ""<Keyboard>/d"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": ""Keyboard&Mouse"",
+                    ""action"": ""ToggleOverlay"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": true
                 }
             ]
         }
