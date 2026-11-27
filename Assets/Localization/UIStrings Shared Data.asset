@@ -1,0 +1,120 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b11a58205ec3474ca216360e9fa74a8, type: 3}
+  m_Name: UIStrings Shared Data
+  m_EditorClassIdentifier: Unity.Localization::UnityEngine.Localization.Tables.SharedTableData
+  m_TableCollectionName: UIStrings
+  m_TableCollectionNameGuidString: faaec4376fba61c42afbf993ffb96ea2
+  m_Entries:
+  - m_Id: 4647845888
+    m_Key: title.quit
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4836589568
+    m_Key: title.credits
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783872
+    m_Key: rules.heading
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783873
+    m_Key: rules.card1.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783874
+    m_Key: rules.card1.desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783875
+    m_Key: rules.card2.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783876
+    m_Key: rules.card2.desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783877
+    m_Key: rules.card3.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783878
+    m_Key: rules.card3.desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783879
+    m_Key: rules.controls
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783880
+    m_Key: result.retry
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783881
+    m_Key: result.title
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783882
+    m_Key: credits.close
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783883
+    m_Key: credits.hint
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783884
+    m_Key: credits.role.director
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783885
+    m_Key: credits.role.programmer
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783886
+    m_Key: credits.role.modeler3d
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783887
+    m_Key: credits.role.bgmodeler
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783888
+    m_Key: credits.role.designer2d
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783889
+    m_Key: game.successBanner
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783890
+    m_Key: game.successFeedback
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783891
+    m_Key: language.ja
+    m_Metadata:
+      m_Items: []
+  - m_Id: 4840783892
+    m_Key: language.en
+    m_Metadata:
+      m_Items: []
+  m_Metadata:
+    m_Items: []
+  m_KeyGenerator:
+    rid: 1899169455800582392
+  references:
+    version: 2
+    RefIds:
+    - rid: 1899169455800582392
+      type: {class: DistributedUIDGenerator, ns: UnityEngine.Localization.Tables, asm: Unity.Localization}
+      data:
+        m_CustomEpoch: 1795754220063

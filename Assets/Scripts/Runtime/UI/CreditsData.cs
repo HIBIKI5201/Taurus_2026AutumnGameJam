@@ -27,6 +27,9 @@ namespace Taurus.Runtime.UI
         public class Section
         {
             [SerializeField] private string _role;
+
+            // 役職名の文字列テーブル（UIStrings）のキー。空なら _role をそのまま出す
+            [SerializeField] private string _roleKey;
             [SerializeField] private List<string> _names = new List<string>();
 
             public Section(string role, List<string> names)
@@ -36,6 +39,14 @@ namespace Taurus.Runtime.UI
             }
 
             public string Role => _role;
+
+            public string RoleKey => _roleKey;
+
+            /// <summary> 役職名のテーブルキーを設定する（主にエディタ構築ツール用）。 </summary>
+            public void SetRoleKey(string roleKey)
+            {
+                _roleKey = roleKey;
+            }
 
             public IReadOnlyList<string> Names => _names;
         }

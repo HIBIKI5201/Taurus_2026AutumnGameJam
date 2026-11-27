@@ -3,6 +3,8 @@ using System.Text;
 using LitMotion;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Localization;
+using UnityEngine.Localization.Settings;
 using UnityEngine.UI;
 
 namespace Taurus.Runtime.UI
@@ -73,6 +75,18 @@ namespace Taurus.Runtime.UI
             BuildColumns();
         }
 
+        private void OnEnable()
+        {
+            LocalizationSettings.SelectedLocaleChanged += HandleSelectedLocaleChanged;
+            BuildColumns();
+        }
+
+        // 言語を切り替えたら役職名を作り直す
+        private void HandleSelectedLocaleChanged(Locale locale)
+        {
+            BuildColumns();
+        }
+
         private void Update()
         {
             if (!_isOpen || Keyboard.current == null)
@@ -88,6 +102,7 @@ namespace Taurus.Runtime.UI
 
         private void OnDisable()
         {
+            LocalizationSettings.SelectedLocaleChanged -= HandleSelectedLocaleChanged;
             if (_fadeHandle.IsActive())
             {
                 _fadeHandle.Cancel();
@@ -136,7 +151,7 @@ namespace Taurus.Runtime.UI
                     target.Append('\n');
                 }
 
-                target.Append($"<color=#{roleColor}><size={_leftColumnText.fontSize * 3 / 4}>{section.Role}</size></color>\n");
+                target.Append($"<color=#{roleColor}><size={_leftColumnText.fontSize * 3 / 4}>{GetRoleLabel(section)}</size></color>\n");
                 foreach (string memberName in section.Names)
                 {
                     target.Append(memberName).Append('\n');
@@ -157,6 +172,11 @@ namespace Taurus.Runtime.UI
             {
                 _rightColumnText.text = right.ToString().TrimEnd('\n');
             }
+        }
+
+        private static string GetRoleLabel(CreditsData.Section section)
+        {
+            return string.IsNullOrEmpty(section.RoleKey) ? section.Role : L10n.Get(section.RoleKey);
         }
 
         // 役職名1行・名前・区切りの空行1行
