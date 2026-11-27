@@ -1,8 +1,11 @@
+using System;
 using System.Collections.Generic;
+using LitMotion;
 using SymphonyFrameWork.System;
 using SymphonyFrameWork.System.ServiceLocate;
 using Taurus.Runtime.Pendulum;
 using UnityEngine;
+using UnityEngine.Audio;
 
 namespace Taurus.Runtime.Game
 {
@@ -34,13 +37,27 @@ namespace Taurus.Runtime.Game
         [SerializeField] private AudioClip _countFloorClip; // カウンター0で減算しようとした時のキャンセル音
         [SerializeField] private AudioClip _recordHighClip; // トップ3入りした時の新記録ジングル
 
-        [Header("Voice Clips（未設定時は無音）")]
-        [SerializeField] private AudioClip _startVoiceClip;         // ゲーム開始（ルール説明から・リトライ）
-        [SerializeField] private AudioClip _waveClearVoiceClip;     // Wave 正解（次のステージに行く前）
-        [SerializeField] private AudioClip _retireVoiceClip;        // Esc で途中終了したとき
-        [SerializeField] private AudioClip _resultRank1VoiceClip;   // リザルト：ランキング1位になったとき
-        [SerializeField] private AudioClip _resultRank2To3VoiceClip;// リザルト：ランキング2位・3位に入ったとき
-        [SerializeField] private AudioClip _resultRankOutVoiceClip; // リザルト：ランキングに入らなかったとき
+        [Header("Voice（場面ごとの候補とセリフ。未設定時は無音）")]
+        [SerializeField] private VoiceCue _startVoice;          // ゲーム開始（ルール説明から・リトライ）
+        [SerializeField] private VoiceCue _waveClearVoice;      // Wave 正解（次のステージに行く前）
+        [SerializeField] private VoiceCue _retireVoice;         // Esc で途中終了したとき
+        [SerializeField] private VoiceCue _resultRank1Voice;    // リザルト：ランキング1位になったとき
+        [SerializeField] private VoiceCue _resultRank2To3Voice; // リザルト：ランキング2位・3位に入ったとき
+        [SerializeField] private VoiceCue _resultRankOutVoice;  // リザルト：ランキングに入らなかったとき
+
+        // ボイス専用の出力（Audio Mixer の Voice グループへ出す）。未設定なら SE と同じ出力
+        [SerializeField] private AudioSource _voiceSource;
+
+        [Header("Audio Mixer（BGM / SE / Voice）")]
+        [SerializeField] private AudioMixer _mixer;
+
+        // BGM グループの音量として公開したパラメーター名
+        [SerializeField] private string _bgmVolumeParameter = "BGMVolume";
+
+        [Tooltip("ボイスが鳴っている間、BGM をどれだけ下げるか（dB）")]
+        [SerializeField, Range(-30f, 0f)] private float _voiceDuckDb = -8f;
+
+        [SerializeField, Min(0.01f)] private float _duckFadeSeconds = 0.15f;
 
         [Tooltip("ボイスの再生音量倍率")]
         [SerializeField, Range(0f, 1.5f)] private float _voiceVolumeScale = 1.0f;
@@ -76,7 +93,15 @@ namespace Taurus.Runtime.Game
 
         // Esc で途中終了したときはリザルトのボイスの代わりにリタイアのボイスを流す
         private bool _isRetiring;
-        private AudioClip _pendingResultVoice;
+        private VoiceCue _pendingResultVoice;
+        private float _bgmBaseDb;
+        private bool _hasBgmBaseDb;
+        private float _duckEndTime;
+        private bool _isDucked;
+        private MotionHandle _duckHandle;
+
+        /// <summary> ボイスを鳴らしたときに発行される（セリフのテーブルキー, ボイスの長さ秒）。吹き出しが受け取る。 </summary>
+        public static event Action<string, float> OnVoiceLinePlayed;
         private GamePhase _lastPhase;
         // 減算時に「0のまま」だったかを判定するため、直前のカウントを覚えておく
         private int _lastPlayerCount;
@@ -231,12 +256,12 @@ namespace Taurus.Runtime.Game
                 if (_lastPhase == GamePhase.Rules && phase == GamePhase.Playing)
                 {
                     PlaySe(_gameStartClip);
-                    PlayVoice(_startVoiceClip);
+                    PlayVoice(_startVoice);
                 }
                 else if (_lastPhase == GamePhase.Result && phase == GamePhase.Playing)
                 {
                     // リザルトからのリトライもゲーム開始として声を出す
-                    PlayVoice(_startVoiceClip);
+                    PlayVoice(_startVoice);
                 }
                 else if (_lastPhase == GamePhase.Result && phase == GamePhase.Title)
                 {
@@ -311,7 +336,7 @@ namespace Taurus.Runtime.Game
         private void HandleWaveSucceeded(int expectedCount, int nextWave)
         {
             PlaySe(_waveSuccessClip);
-            PlayVoice(_waveClearVoiceClip);
+            PlayVoice(_waveClearVoice);
         }
 
         private void HandleGameFinished(int clearedWaves, int expectedCount, int playerCount, IReadOnlyList<int> records)
@@ -320,7 +345,7 @@ namespace Taurus.Runtime.Game
             PlaySe(_gameOverClip);
 
             // リタイアならリタイアの声、そうでなければ今回の順位で声を変える（ゲームオーバー音の少し後）
-            _pendingResultVoice = _isRetiring ? _retireVoiceClip : SelectResultVoice(clearedWaves, records);
+            _pendingResultVoice = _isRetiring ? _retireVoice : SelectResultVoice(clearedWaves, records);
             _isRetiring = false;
             CancelInvoke(nameof(PlayPendingResultVoice));
             Invoke(nameof(PlayPendingResultVoice), Mathf.Max(0f, _resultVoiceDelaySeconds));
@@ -352,14 +377,14 @@ namespace Taurus.Runtime.Game
             return 0;
         }
 
-        private AudioClip SelectResultVoice(int clearedWaves, IReadOnlyList<int> records)
+        private VoiceCue SelectResultVoice(int clearedWaves, IReadOnlyList<int> records)
         {
             switch (GetRecordRank(clearedWaves, records))
             {
-                case 1: return _resultRank1VoiceClip;
+                case 1: return _resultRank1Voice;
                 case 2:
-                case 3: return _resultRank2To3VoiceClip;
-                default: return _resultRankOutVoiceClip;
+                case 3: return _resultRank2To3Voice;
+                default: return _resultRankOutVoice;
             }
         }
 
@@ -374,17 +399,81 @@ namespace Taurus.Runtime.Game
             _pendingResultVoice = null;
         }
 
-        // ボイスは SE と同じ出力に、ボイス用の音量で重ねて鳴らす（冒頭の無音は SE と同じく詰める）
-        private void PlayVoice(AudioClip clip)
+        // 場面の候補からボイスを選んで鳴らし、そのセリフを吹き出しへ知らせ、鳴っている間は BGM を下げる
+        private void PlayVoice(VoiceCue cue)
         {
-            AudioSource source = ResolveAudioSource(_seAudioGroup, _seSource);
-            if (source == null || clip == null)
+            if (cue == null || !cue.TryPick(out VoiceCue.Entry entry, out float volume, out float pitch))
             {
                 return;
             }
 
-            AudioClip playable = _autoTrimLeadingSilence ? GetOrCreateTrimmedClip(clip) : clip;
-            source.PlayOneShot(playable, Mathf.Clamp(_voiceVolumeScale, 0f, 1.5f));
+            AudioSource source = _voiceSource != null ? _voiceSource : ResolveAudioSource(_seAudioGroup, _seSource);
+            if (source == null)
+            {
+                return;
+            }
+
+            AudioClip playable = _autoTrimLeadingSilence ? GetOrCreateTrimmedClip(entry.Clip) : entry.Clip;
+            if (source == _voiceSource)
+            {
+                // 声どうしは重ねず、新しい声で前の声を止める
+                source.Stop();
+                source.pitch = pitch;
+            }
+
+            source.PlayOneShot(playable, Mathf.Clamp(_voiceVolumeScale * volume, 0f, 1.5f));
+            float seconds = playable.length / Mathf.Max(0.01f, Mathf.Abs(source.pitch));
+            OnVoiceLinePlayed?.Invoke(entry.LineKey, seconds);
+        }
+
+        // ボイスの間だけ BGM グループの音量を下げ、終わったら戻す
+        private void DuckBgm(float seconds)
+        {
+            if (_mixer == null || string.IsNullOrEmpty(_bgmVolumeParameter))
+            {
+                return;
+            }
+
+            if (!_hasBgmBaseDb)
+            {
+                if (!_mixer.GetFloat(_bgmVolumeParameter, out _bgmBaseDb))
+                {
+                    return;
+                }
+
+                _hasBgmBaseDb = true;
+            }
+
+            // 声が重なったら、最後の声が終わるまで下げたままにする
+            _duckEndTime = Mathf.Max(_duckEndTime, Time.unscaledTime + seconds);
+            if (!_isDucked)
+            {
+                _isDucked = true;
+                FadeBgmTo(_bgmBaseDb + _voiceDuckDb);
+            }
+        }
+
+        private void Update()
+        {
+            // Invoke は時間の刻みで終了時刻より少し早く呼ばれることがあり、戻し損ねるため毎フレーム見る
+            if (_isDucked && Time.unscaledTime >= _duckEndTime)
+            {
+                _isDucked = false;
+                FadeBgmTo(_bgmBaseDb);
+            }
+        }
+
+        private void FadeBgmTo(float targetDb)
+        {
+            if (_duckHandle.IsActive())
+            {
+                _duckHandle.Cancel();
+            }
+
+            _mixer.GetFloat(_bgmVolumeParameter, out float currentDb);
+            _duckHandle = LMotion.Create(currentDb, targetDb, _duckFadeSeconds)
+                .WithScheduler(MotionScheduler.UpdateIgnoreTimeScale)
+                .Bind(this, static (db, self) => self._mixer.SetFloat(self._bgmVolumeParameter, db));
         }
 
         private void PlayRecordHigh()
