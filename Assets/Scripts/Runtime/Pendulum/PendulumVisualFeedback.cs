@@ -2,44 +2,37 @@ using UnityEngine;
 
 namespace Taurus.Runtime.Pendulum
 {
-    /// <summary>
-    /// 真上通過時に親玉（ライム #d5ff58）と子玉（コーラル #ff735b）を約 0.48 秒発光・拡大演出させるコンポーネント。
-    /// PendulumMotion と同じ Prefab ルートにアタッチして使用する。
-    ///
-    /// 【3D / 2D 両対応と引き継ぎポイント】
-    /// - 3D モデル（MeshRenderer）では Awake 時にマテリアルの _EMISSION キーワードを有効化したうえで、
-    ///   MaterialPropertyBlock で _BaseColor と HDR の _EmissionColor を更新する（Bloom 連携対応）。
-    /// - 2D SpriteRenderer が設定されている場合も互換動作する。
-    /// - 本番パーティクル等を追加したい場合は、HandleTopCrossed 内で再生処理を追加する。
-    /// </summary>
+    /// <summary> 真上通過時に親玉・子玉・孫玉の HDR Emission カラーとスケールを演出する。 </summary>
     [RequireComponent(typeof(PendulumMotion))]
     public class PendulumVisualFeedback : MonoBehaviour
     {
         // 仕様書第9章準拠：真上通過時の発光持続時間（秒）
         private const float FLASH_DURATION = 0.48f;
         private const float PEAK_SCALE_MULTIPLIER = 1.45f;
+        private const float DEFAULT_FLASH_INTENSITY = 6.0f;
 
-        private static readonly int BASE_COLOR_ID = Shader.PropertyToID("_BaseColor");
-        private static readonly int COLOR_ID = Shader.PropertyToID("_Color");
         private static readonly int EMISSION_COLOR_ID = Shader.PropertyToID("_EmissionColor");
-
-        [Header("Emission Settings（Bloomと連携するHDR発光強度）")]
-        [SerializeField, Min(0f)] private float _emissionIntensity = 6.0f;
 
         [Header("Parent Bob（親玉）")]
         [SerializeField] private Transform _parentBob;
         [SerializeField] private Renderer _parentBobMeshRenderer;
         [SerializeField] private SpriteRenderer _parentBobRenderer;
+        [SerializeField, ColorUsage(false, true)] private Color _parentIdleEmissionColor = Color.black;
+        [SerializeField, ColorUsage(false, true)] private Color _parentFlashEmissionColor = PendulumFlashPalette.ParentFlashColor.linear * DEFAULT_FLASH_INTENSITY;
 
         [Header("Child Bob（子玉：二重・三重振り子）")]
         [SerializeField] private Transform _childBob;
         [SerializeField] private Renderer _childBobMeshRenderer;
         [SerializeField] private SpriteRenderer _childBobRenderer;
+        [SerializeField, ColorUsage(false, true)] private Color _childIdleEmissionColor = Color.black;
+        [SerializeField, ColorUsage(false, true)] private Color _childFlashEmissionColor = PendulumFlashPalette.ChildFlashColor.linear * DEFAULT_FLASH_INTENSITY;
 
         [Header("Grandchild Bob（孫玉：三重振り子のみ）")]
         [SerializeField] private Transform _grandchildBob;
         [SerializeField] private Renderer _grandchildBobMeshRenderer;
         [SerializeField] private SpriteRenderer _grandchildBobRenderer;
+        [SerializeField, ColorUsage(false, true)] private Color _grandchildIdleEmissionColor = Color.black;
+        [SerializeField, ColorUsage(false, true)] private Color _grandchildFlashEmissionColor = PendulumFlashPalette.GrandchildFlashColor.linear * DEFAULT_FLASH_INTENSITY;
 
         private PendulumMotion _motion;
         private MaterialPropertyBlock _parentPropBlock;
@@ -79,6 +72,35 @@ namespace Taurus.Runtime.Pendulum
             EnableEmissionKeyword(_childBobMeshRenderer);
             EnableEmissionKeyword(_grandchildBobMeshRenderer);
 
+            // 起動直後から通常時エミッションカラーを反映する
+            ApplyFlashVisual(
+                _parentBob,
+                _parentBobMeshRenderer,
+                _parentBobRenderer,
+                _parentPropBlock,
+                _parentBaseScale,
+                _parentIdleEmissionColor,
+                _parentFlashEmissionColor,
+                0f);
+            ApplyFlashVisual(
+                _childBob,
+                _childBobMeshRenderer,
+                _childBobRenderer,
+                _childPropBlock,
+                _childBaseScale,
+                _childIdleEmissionColor,
+                _childFlashEmissionColor,
+                0f);
+            ApplyFlashVisual(
+                _grandchildBob,
+                _grandchildBobMeshRenderer,
+                _grandchildBobRenderer,
+                _grandchildPropBlock,
+                _grandchildBaseScale,
+                _grandchildIdleEmissionColor,
+                _grandchildFlashEmissionColor,
+                0f);
+
             if (_motion != null)
             {
                 _motion.OnBobTopCrossed += HandleBobTopCrossed;
@@ -111,10 +133,9 @@ namespace Taurus.Runtime.Pendulum
                 _grandchildBobRenderer,
                 _grandchildPropBlock,
                 _grandchildBaseScale,
-                PendulumFlashPalette.GrandchildBaseColor,
-                PendulumFlashPalette.GrandchildFlashColor,
-                0f,
-                _emissionIntensity);
+                _grandchildIdleEmissionColor,
+                _grandchildFlashEmissionColor,
+                0f);
         }
 
         /// <summary> エディタ構築ツール（ProjectSceneSetupTool）から2D玉の参照を設定する。 </summary>
@@ -156,10 +177,9 @@ namespace Taurus.Runtime.Pendulum
                     _parentBobRenderer,
                     _parentPropBlock,
                     _parentBaseScale,
-                    PendulumFlashPalette.ParentBaseColor,
-                    PendulumFlashPalette.ParentFlashColor,
-                    _parentFlashTimer / FLASH_DURATION,
-                    _emissionIntensity);
+                    _parentIdleEmissionColor,
+                    _parentFlashEmissionColor,
+                    _parentFlashTimer / FLASH_DURATION);
             }
 
             if (_childFlashTimer > 0f)
@@ -171,10 +191,9 @@ namespace Taurus.Runtime.Pendulum
                     _childBobRenderer,
                     _childPropBlock,
                     _childBaseScale,
-                    PendulumFlashPalette.ChildBaseColor,
-                    PendulumFlashPalette.ChildFlashColor,
-                    _childFlashTimer / FLASH_DURATION,
-                    _emissionIntensity);
+                    _childIdleEmissionColor,
+                    _childFlashEmissionColor,
+                    _childFlashTimer / FLASH_DURATION);
             }
 
             if (_grandchildFlashTimer > 0f)
@@ -186,10 +205,9 @@ namespace Taurus.Runtime.Pendulum
                     _grandchildBobRenderer,
                     _grandchildPropBlock,
                     _grandchildBaseScale,
-                    PendulumFlashPalette.GrandchildBaseColor,
-                    PendulumFlashPalette.GrandchildFlashColor,
-                    _grandchildFlashTimer / FLASH_DURATION,
-                    _emissionIntensity);
+                    _grandchildIdleEmissionColor,
+                    _grandchildFlashEmissionColor,
+                    _grandchildFlashTimer / FLASH_DURATION);
             }
         }
 
@@ -204,10 +222,9 @@ namespace Taurus.Runtime.Pendulum
                     _grandchildBobRenderer,
                     _grandchildPropBlock,
                     _grandchildBaseScale,
-                    PendulumFlashPalette.GrandchildBaseColor,
-                    PendulumFlashPalette.GrandchildFlashColor,
-                    1f,
-                    _emissionIntensity);
+                    _grandchildIdleEmissionColor,
+                    _grandchildFlashEmissionColor,
+                    1f);
             }
             else if (bobTier == 1)
             {
@@ -218,10 +235,9 @@ namespace Taurus.Runtime.Pendulum
                     _childBobRenderer,
                     _childPropBlock,
                     _childBaseScale,
-                    PendulumFlashPalette.ChildBaseColor,
-                    PendulumFlashPalette.ChildFlashColor,
-                    1f,
-                    _emissionIntensity);
+                    _childIdleEmissionColor,
+                    _childFlashEmissionColor,
+                    1f);
             }
             else
             {
@@ -232,10 +248,9 @@ namespace Taurus.Runtime.Pendulum
                     _parentBobRenderer,
                     _parentPropBlock,
                     _parentBaseScale,
-                    PendulumFlashPalette.ParentBaseColor,
-                    PendulumFlashPalette.ParentFlashColor,
-                    1f,
-                    _emissionIntensity);
+                    _parentIdleEmissionColor,
+                    _parentFlashEmissionColor,
+                    1f);
             }
         }
 
@@ -265,12 +280,11 @@ namespace Taurus.Runtime.Pendulum
             SpriteRenderer spriteRenderer,
             MaterialPropertyBlock propBlock,
             Vector3 baseScale,
-            Color baseColor,
-            Color flashColor,
-            float normalizedRemaining,
-            float emissionIntensity)
+            Color idleEmissionColor,
+            Color flashEmissionColor,
+            float normalizedRemaining)
         {
-            // 二次カーブで素早く光って滑らかに元へ戻す
+            // 二次カーブで素早く光って滑らかに通常色へ戻す
             float ease = normalizedRemaining * normalizedRemaining;
             if (bob != null)
             {
@@ -278,23 +292,20 @@ namespace Taurus.Runtime.Pendulum
                 bob.localScale = baseScale * scaleFactor;
             }
 
-            Color currentColor = Color.Lerp(baseColor, flashColor, ease);
+            Color currentEmission = Color.Lerp(idleEmissionColor, flashEmissionColor, ease);
 
-            // 3D MeshRenderer（URP Lit）は MaterialPropertyBlock で色と HDR Linear Emission を更新
+            // 3D MeshRenderer（URP Lit）は MaterialPropertyBlock で HDR _EmissionColor のみを補間更新
             if (meshRenderer != null && propBlock != null)
             {
                 meshRenderer.GetPropertyBlock(propBlock);
-                propBlock.SetColor(BASE_COLOR_ID, currentColor);
-                propBlock.SetColor(COLOR_ID, currentColor);
-                Color hdrEmission = flashColor.linear * (ease * emissionIntensity);
-                propBlock.SetColor(EMISSION_COLOR_ID, hdrEmission);
+                propBlock.SetColor(EMISSION_COLOR_ID, currentEmission);
                 meshRenderer.SetPropertyBlock(propBlock);
             }
 
             // 2D SpriteRenderer 互換
             if (spriteRenderer != null)
             {
-                spriteRenderer.color = currentColor;
+                spriteRenderer.color = currentEmission;
             }
         }
     }
