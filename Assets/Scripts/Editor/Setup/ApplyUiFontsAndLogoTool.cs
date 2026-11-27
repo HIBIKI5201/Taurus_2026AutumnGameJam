@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Taurus.Runtime.UI;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -289,6 +290,261 @@ namespace Taurus.Editor.Setup
 
             AssetDatabase.SaveAssets();
             Debug.Log($"[{nameof(ApplyUiFontsAndLogoTool)}] フルスクリーン(FullScreenWindow) & CanvasScaler(Expand 1920x1080) 適用完了");
+        }
+
+        [MenuItem("Taurus/Apply Final UI Deliverables")]
+        public static void ApplyFinalUiDeliverables()
+        {
+            const string UI_ROOT = "Assets/AssetStoreTools/UI/";
+            string[] newSprites =
+            {
+                UI_ROOT + "UI_Btn_GameStart/gamestart_script.png",
+                UI_ROOT + "UI_Btn_ResultActions/ResultPanelTab.png",
+                UI_ROOT + "UI_Btn_ResultActions/RetryIcon.png",
+                UI_ROOT + "UI_Btn_ResultActions/ReturnToTitleIcon.png",
+                UI_ROOT + "UI_Btn_ResultActions/SpeechBubble.png",
+            };
+
+            foreach (string path in newSprites)
+            {
+                EnsureSpriteImport(path);
+            }
+
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+
+            Sprite ruleCardSprite = LoadMainSprite(UI_ROOT + "UI_Rules_DemoIllust/rule.png");
+            Sprite wavesClearedSprite = LoadMainSprite(UI_ROOT + "UI_Btn_ResultActions/wavesclered.png");
+            Sprite top3RecordsSprite = LoadMainSprite(UI_ROOT + "UI_Btn_ResultActions/top3records.png");
+            Sprite retryIconSprite = LoadMainSprite(UI_ROOT + "UI_Btn_ResultActions/RetryIcon.png");
+            Sprite returnIconSprite = LoadMainSprite(UI_ROOT + "UI_Btn_ResultActions/ReturnToTitleIcon.png");
+            Sprite resultTabSprite = LoadMainSprite(UI_ROOT + "UI_Btn_ResultActions/ResultPanelTab.png");
+            Sprite speechBubbleSprite = LoadMainSprite(UI_ROOT + "UI_Btn_ResultActions/SpeechBubble.png");
+            Sprite gameStartScriptSprite = LoadMainSprite(UI_ROOT + "UI_Btn_GameStart/gamestart_script.png");
+
+            // 1. UISkin_WIP.asset の仮画像をすべて本番素材へ差し替え
+            UISkin skin = AssetDatabase.LoadAssetAtPath<UISkin>("Assets/Level/UI/UISkin_WIP.asset");
+            if (skin != null)
+            {
+                SerializedObject so = new SerializedObject(skin);
+                SerializedProperty entries = so.FindProperty("_entries");
+                SetSkinSlot(entries, (int)UISkinSlot.RulesCard, ruleCardSprite);
+                SetSkinSlot(entries, (int)UISkinSlot.ResultClearedFrame, wavesClearedSprite);
+                SetSkinSlot(entries, (int)UISkinSlot.ResultRecordsFrame, top3RecordsSprite);
+                SetSkinSlot(entries, (int)UISkinSlot.RetryIcon, retryIconSprite);
+                SetSkinSlot(entries, (int)UISkinSlot.ReturnToTitleIcon, returnIconSprite);
+                so.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(skin);
+            }
+
+            // 2. GameScene のレイアウトを完成見本(UI1/UI2/UI3)へ合わせて更新
+            bool wasLoaded = EditorSceneManager.GetSceneByPath(GAME_SCENE_PATH).isLoaded;
+            Scene scene = wasLoaded
+                ? EditorSceneManager.GetSceneByPath(GAME_SCENE_PATH)
+                : EditorSceneManager.OpenScene(GAME_SCENE_PATH, OpenSceneMode.Additive);
+
+            Transform canvas = FindChildByName(scene, "Canvas");
+            if (canvas != null)
+            {
+                // タイトル画面（UI1.png 準拠）
+                Transform titlePanel = canvas.Find("TitlePanel");
+                if (titlePanel != null)
+                {
+                    SetRect(titlePanel.Find("TitleLogoImage"), new Vector2(-410f, 145f), new Vector2(1060f, 505f));
+                    Transform startBtn = titlePanel.Find("TitleStartButton");
+                    SetRect(startBtn, new Vector2(0f, -395f), new Vector2(620f, 112f));
+                    if (startBtn != null && gameStartScriptSprite != null)
+                    {
+                        Image scriptOverlay = EnsureImage(startBtn, "GameStartScriptOverlay");
+                        scriptOverlay.sprite = gameStartScriptSprite;
+                        scriptOverlay.preserveAspect = true;
+                        scriptOverlay.raycastTarget = false;
+                        SetRect(scriptOverlay.transform, new Vector2(155f, -42f), new Vector2(270f, 100f));
+                    }
+                }
+
+                // リザルト画面（UI2.png 準拠 + リトライUI崩れ解消）
+                Transform resultPanel = canvas.Find("ResultPanel");
+                if (resultPanel != null)
+                {
+                    // 右側リザルトタブ背景
+                    Transform back = resultPanel.Find("Back");
+                    if (back != null)
+                    {
+                        if (back is RectTransform backRt)
+                        {
+                            backRt.anchorMin = new Vector2(0.5f, 0.5f);
+                            backRt.anchorMax = new Vector2(0.5f, 0.5f);
+                            backRt.pivot = new Vector2(0.5f, 0.5f);
+                            backRt.anchoredPosition = new Vector2(730f, -10f);
+                            backRt.sizeDelta = new Vector2(460f, 870f);
+                            EditorUtility.SetDirty(backRt);
+                        }
+
+                        Image backImg = back.GetComponent<Image>();
+                        if (backImg != null && resultTabSprite != null)
+                        {
+                            backImg.sprite = resultTabSprite;
+                            backImg.color = Color.white;
+                            backImg.preserveAspect = true;
+                            EditorUtility.SetDirty(backImg);
+                        }
+                    }
+
+                    // 上中央: - GAME OVER - と クリア数カプセル
+                    SetRect(resultPanel.Find("GameOverImage"), new Vector2(-130f, 415f), new Vector2(720f, 180f));
+                    SetRect(resultPanel.Find("ClearedFrame"), new Vector2(-130f, 245f), new Vector2(280f, 174f));
+                    SetRect(resultPanel.Find("ClearedWavesText"), new Vector2(-130f, 272f), new Vector2(240f, 100f));
+                    SetTextSize(resultPanel.Find("ClearedWavesText"), 86);
+                    SetActiveSafe(resultPanel.Find("ClearedCaption"), false);
+
+                    // リプレイ答えカウンターを左上へ独立配置（中央振り子と被らない）
+                    SetRect(resultPanel.Find("ReplayCounter"), new Vector2(-690f, 385f), new Vector2(280f, 210f));
+
+                    // 左下吹き出し + ResultDetailText
+                    if (speechBubbleSprite != null)
+                    {
+                        Image bubble = EnsureImage(resultPanel, "SpeechBubble");
+                        bubble.sprite = speechBubbleSprite;
+                        bubble.preserveAspect = true;
+                        bubble.raycastTarget = false;
+                        SetRect(bubble.transform, new Vector2(-210f, -400f), new Vector2(440f, 92f));
+                        Transform detail = resultPanel.Find("ResultDetailText");
+                        if (detail != null)
+                        {
+                            bubble.transform.SetSiblingIndex(detail.GetSiblingIndex());
+                            SetRect(detail, new Vector2(-195f, -400f), new Vector2(380f, 72f));
+                            Text detailText = detail.GetComponent<Text>();
+                            if (detailText != null)
+                            {
+                                detailText.fontSize = 24;
+                                detailText.color = new Color(0.988f, 0.949f, 0.902f, 1f);
+                                EditorUtility.SetDirty(detailText);
+                            }
+                        }
+                    }
+
+                    // 右タブ上段: TOP3 RECORDS（画像に1st/2nd/3rd文字入りなのでテキスト重複を非表示）
+                    SetRect(resultPanel.Find("RecordsFrame"), new Vector2(740f, 185f), new Vector2(340f, 205f));
+                    SetActiveSafe(resultPanel.Find("RecordsTitle"), false);
+                    SetActiveSafe(resultPanel.Find("RecordRank_1"), false);
+                    SetActiveSafe(resultPanel.Find("RecordRank_2"), false);
+                    SetActiveSafe(resultPanel.Find("RecordRank_3"), false);
+                    SetRect(resultPanel.Find("RecordValue_1"), new Vector2(740f, 132f), new Vector2(110f, 56f));
+                    SetRect(resultPanel.Find("RecordValue_2"), new Vector2(638f, 76f), new Vector2(110f, 56f));
+                    SetRect(resultPanel.Find("RecordValue_3"), new Vector2(842f, 76f), new Vector2(110f, 56f));
+                    SetTextSize(resultPanel.Find("RecordValue_1"), 46);
+                    SetTextSize(resultPanel.Find("RecordValue_2"), 44);
+                    SetTextSize(resultPanel.Find("RecordValue_3"), 44);
+
+                    // 右タブ下段: リトライ・タイトルへボタン（KeyIconを下段独立配置で重なり解消）
+                    LayoutResultActionButton(resultPanel.Find("RetryButton"), new Vector2(665f, -210f));
+                    LayoutResultActionButton(resultPanel.Find("HomeButton"), new Vector2(815f, -210f));
+                }
+
+                // UISkinApplier を即時反映してシーン上の Image 参照も最新に同期
+                UISkinApplier applier = canvas.GetComponent<UISkinApplier>();
+                if (applier != null)
+                {
+                    applier.ApplyAll();
+                    EditorUtility.SetDirty(applier);
+                }
+            }
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            if (!wasLoaded)
+            {
+                EditorSceneManager.CloseScene(scene, true);
+            }
+
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[{nameof(ApplyUiFontsAndLogoTool)}] 完成UIデータ一括反映完了（UISkin_WIP & GameScene）");
+        }
+
+        private static Sprite LoadMainSprite(string assetPath)
+        {
+            Object[] all = AssetDatabase.LoadAllAssetsAtPath(assetPath);
+            foreach (Object obj in all)
+            {
+                if (obj is Sprite sp)
+                {
+                    return sp;
+                }
+            }
+
+            return AssetDatabase.LoadAssetAtPath<Sprite>(assetPath);
+        }
+
+        private static void SetSkinSlot(SerializedProperty entries, int slotValue, Sprite sprite)
+        {
+            if (entries == null || sprite == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < entries.arraySize; i++)
+            {
+                SerializedProperty elem = entries.GetArrayElementAtIndex(i);
+                if (elem.FindPropertyRelative("_slot").intValue == slotValue)
+                {
+                    elem.FindPropertyRelative("_sprite").objectReferenceValue = sprite;
+                    return;
+                }
+            }
+
+            int idx = entries.arraySize;
+            entries.InsertArrayElementAtIndex(idx);
+            SerializedProperty added = entries.GetArrayElementAtIndex(idx);
+            added.FindPropertyRelative("_slot").intValue = slotValue;
+            added.FindPropertyRelative("_sprite").objectReferenceValue = sprite;
+        }
+
+        private static void LayoutResultActionButton(Transform btn, Vector2 pos)
+        {
+            if (btn == null)
+            {
+                return;
+            }
+
+            SetRect(btn, pos, new Vector2(145f, 165f));
+            SetRect(btn.Find("Icon"), new Vector2(0f, 30f), new Vector2(76f, 76f));
+            SetRect(btn.Find("Label"), new Vector2(0f, -30f), new Vector2(145f, 34f));
+            SetTextSize(btn.Find("Label"), 22);
+            SetRect(btn.Find("KeyIcon"), new Vector2(0f, -66f), new Vector2(120f, 40f));
+        }
+
+        private static void SetRect(Transform target, Vector2 pos, Vector2 size)
+        {
+            if (target is RectTransform rt)
+            {
+                rt.anchoredPosition = pos;
+                rt.sizeDelta = size;
+                EditorUtility.SetDirty(rt);
+            }
+        }
+
+        private static void SetTextSize(Transform target, int fontSize)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            Text txt = target.GetComponent<Text>();
+            if (txt != null)
+            {
+                txt.fontSize = fontSize;
+                EditorUtility.SetDirty(txt);
+            }
+        }
+
+        private static void SetActiveSafe(Transform target, bool active)
+        {
+            if (target != null)
+            {
+                target.gameObject.SetActive(active);
+                EditorUtility.SetDirty(target.gameObject);
+            }
         }
 
         private static bool ShouldUseFirjar(Text text)

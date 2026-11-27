@@ -38,12 +38,12 @@ MonoBehaviour:
   - _slot: 30
     _sprite: {fileID: 4129766356537927628, guid: e177b1cbaba5cb9ebb1554ebd203edce, type: 3}
   - _slot: 13
-    _sprite: {fileID: 21300000, guid: 65d1af645ea09894f9e095e29af01c87, type: 3}
+    _sprite: {fileID: -1946158105289524409, guid: 98f56cd243f009e9af9b45cff10519cd, type: 3}
   - _slot: 31
-    _sprite: {fileID: 8131871394276593939, guid: a38c7e47a5819fda24cbdd1ce780920d, type: 3}
+    _sprite: {fileID: -3019196585446928850, guid: d7389c4dbb0fbbeddeef578794785768, type: 3}
   - _slot: 32
-    _sprite: {fileID: 21300000, guid: 5323b550373621e41804125d187bf13b, type: 3}
+    _sprite: {fileID: 3244811044911302487, guid: edd5b66c7871d4944c55e7d88d810433, type: 3}
   - _slot: 33
-    _sprite: {fileID: 21300000, guid: 757db87fea4d22d4f8db15088eead80c, type: 3}
+    _sprite: {fileID: 21300000, guid: cda09b17d5baa5b499b5343d4df3f459, type: 3}
   - _slot: 34
-    _sprite: {fileID: 21300000, guid: 7daab3ee1ab4665438759bc0038c5b72, type: 3}
+    _sprite: {fileID: 21300000, guid: bca8a7502dc61aa4b9d7e1bb797ddee6, type: 3}
