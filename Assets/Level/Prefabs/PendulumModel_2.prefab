@@ -229,6 +229,14 @@ MonoBehaviour:
   _grandchildBobRenderer: {fileID: 0}
   _grandchildIdleEmissionColor: {r: 0, g: 0, b: 0, a: 1}
   _grandchildFlashEmissionColor: {r: 0.06013695, g: 4.965426, b: 6, a: 6}
+  _pseudoBloomMaterial: {fileID: 2100000, guid: 9a3e5b71c4d842f18b620e4a91f73c2d, type: 2}
+  _usePseudoGlowOnWebGl: 1
+  _previewPseudoGlowInEditor: 0
+  _pseudoBloomIdleScale: 3.8
+  _pseudoBloomFlashScale: 15.5
+  _pseudoLightIdleIntensity: 2.4
+  _pseudoLightFlashIntensity: 18
+  _pseudoLightRange: 10
 --- !u!1 &6145604662544342836
 GameObject:
   m_ObjectHideFlags: 0
