@@ -26,11 +26,11 @@ Transform:
   m_GameObject: {fileID: 2039804949315115915}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.000099996105, y: 0, z: -0.0075}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalPosition: {x: -0.017686479, y: -0.00025990233, z: 0.00003359531}
+  m_LocalScale: {x: 0.99999994, y: 0.99999994, z: 0.99999994}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 7973736489192097680}
+  m_Father: {fileID: 1555894672365074735}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!96 &1433979870604024428
 TrailRenderer:
@@ -266,11 +266,11 @@ Transform:
   m_GameObject: {fileID: 6145604662544342836}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.0067, y: -0, z: -0.0006}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalPosition: {x: -0.020925393, y: -0.0000036098063, z: -0.000021488406}
+  m_LocalScale: {x: 0.99999994, y: 0.99999994, z: 0.99999994}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 6354612910293939644}
+  m_Father: {fileID: 7973736489192097680}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!96 &5066935509287460926
 TrailRenderer:
@@ -486,10 +486,10 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects:
-    - targetCorrespondingSourceObject: {fileID: 2290106793107569666, guid: ece82635e5dc519478c5548f6d3b8e64, type: 3}
-      insertIndex: 0
+    - targetCorrespondingSourceObject: {fileID: -1947853981740891459, guid: ece82635e5dc519478c5548f6d3b8e64, type: 3}
+      insertIndex: -1
       addedObject: {fileID: 8380890315174507891}
-    - targetCorrespondingSourceObject: {fileID: 2977000504603790894, guid: ece82635e5dc519478c5548f6d3b8e64, type: 3}
+    - targetCorrespondingSourceObject: {fileID: 2290106793107569666, guid: ece82635e5dc519478c5548f6d3b8e64, type: 3}
       insertIndex: -1
       addedObject: {fileID: 7190411481498128758}
     m_AddedComponents: []
@@ -502,11 +502,6 @@ Transform:
 --- !u!137 &2201778489158294530 stripped
 SkinnedMeshRenderer:
   m_CorrespondingSourceObject: {fileID: 8065446892770650000, guid: ece82635e5dc519478c5548f6d3b8e64, type: 3}
-  m_PrefabInstance: {fileID: 8169653873137367954}
-  m_PrefabAsset: {fileID: 0}
---- !u!4 &6354612910293939644 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 2977000504603790894, guid: ece82635e5dc519478c5548f6d3b8e64, type: 3}
   m_PrefabInstance: {fileID: 8169653873137367954}
   m_PrefabAsset: {fileID: 0}
 --- !u!4 &7973736489192097680 stripped
