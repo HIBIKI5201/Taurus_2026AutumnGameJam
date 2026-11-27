@@ -239,6 +239,58 @@ namespace Taurus.Editor.Setup
             Debug.Log($"[{nameof(ApplyUiFontsAndLogoTool)}] SuccessBanner のトンマナ適用完了");
         }
 
+        [MenuItem("Taurus/Apply Fullscreen and Canvas Expand")]
+        public static void ApplyFullscreenAndCanvasExpand()
+        {
+            // 1. PlayerSettings：ボーダレスフルスクリーン（ネイティブ解像度）へ変更
+            PlayerSettings.fullScreenMode = FullScreenMode.FullScreenWindow;
+            PlayerSettings.defaultIsNativeResolution = true;
+            PlayerSettings.resizableWindow = true;
+            PlayerSettings.defaultScreenWidth = 1920;
+            PlayerSettings.defaultScreenHeight = 1080;
+
+            // 2. GameScene の CanvasScaler を Expand（16:9 / 16:10 等で1920x1080が必ず画面内に収まる）へ変更
+            bool wasGameSceneLoaded = EditorSceneManager.GetSceneByPath(GAME_SCENE_PATH).isLoaded;
+            Scene scene = wasGameSceneLoaded
+                ? EditorSceneManager.GetSceneByPath(GAME_SCENE_PATH)
+                : EditorSceneManager.OpenScene(GAME_SCENE_PATH, OpenSceneMode.Additive);
+
+            Transform canvas = FindChildByName(scene, "Canvas");
+            if (canvas != null)
+            {
+                CanvasScaler scaler = canvas.GetComponent<CanvasScaler>();
+                if (scaler != null)
+                {
+                    scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                    scaler.referenceResolution = new Vector2(1920f, 1080f);
+                    scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
+                    EditorUtility.SetDirty(scaler);
+                }
+
+                // Expand 時に 16:10 等で縦に余白ができてもタイトルキャラの下端が浮かないよう下端基準のフィットに調整
+                Transform titleChara = canvas.Find("TitlePanel/TitleCharacterImage");
+                if (titleChara != null && titleChara is RectTransform charaRt)
+                {
+                    charaRt.anchorMin = new Vector2(0.5f, 0f);
+                    charaRt.anchorMax = new Vector2(0.5f, 0f);
+                    charaRt.pivot = new Vector2(0.5f, 0f);
+                    charaRt.anchoredPosition = Vector2.zero;
+                    charaRt.sizeDelta = new Vector2(1920f, 1080f);
+                    EditorUtility.SetDirty(charaRt);
+                }
+            }
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            if (!wasGameSceneLoaded)
+            {
+                EditorSceneManager.CloseScene(scene, true);
+            }
+
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[{nameof(ApplyUiFontsAndLogoTool)}] フルスクリーン(FullScreenWindow) & CanvasScaler(Expand 1920x1080) 適用完了");
+        }
+
         private static bool ShouldUseFirjar(Text text)
         {
             if (FIRJAR_TEXT_NAMES.Contains(text.gameObject.name))
