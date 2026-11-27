@@ -1604,6 +1604,85 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 305000764}
   m_CullTransparentMesh: 1
+--- !u!1 &313054445
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 313054446}
+  - component: {fileID: 313054448}
+  - component: {fileID: 313054447}
+  m_Layer: 0
+  m_Name: CountLabel
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &313054446
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 313054445}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1424096402}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 260}
+  m_SizeDelta: {x: 287, y: 36}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &313054447
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 313054445}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5f7201a12d95ffc409449d95f23cf332, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
+  m_Material: {fileID: 0}
+  m_Color: {r: 0.9882353, g: 0.94509804, b: 0.9019608, a: 1}
+  m_RaycastTarget: 0
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_FontData:
+    m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
+    m_FontSize: 22
+    m_FontStyle: 0
+    m_BestFit: 0
+    m_MinSize: 10
+    m_MaxSize: 40
+    m_Alignment: 4
+    m_AlignByGeometry: 0
+    m_RichText: 1
+    m_HorizontalOverflow: 0
+    m_VerticalOverflow: 1
+    m_LineSpacing: 1
+  m_Text: YOUR COUNT
+--- !u!222 &313054448
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 313054445}
+  m_CullTransparentMesh: 1
 --- !u!1 &316385234
 GameObject:
   m_ObjectHideFlags: 0
@@ -6171,8 +6250,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 452}
-  m_SizeDelta: {x: 280, y: 120}
+  m_AnchoredPosition: {x: 740, y: 340}
+  m_SizeDelta: {x: 260, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &1171224236
 CanvasRenderer:
@@ -6195,7 +6274,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
   m_Material: {fileID: 0}
-  m_Color: {r: 0.48235294, g: 0.33333334, b: 0.30980393, a: 1}
+  m_Color: {r: 0.482, g: 0.333, b: 0.31, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -6204,11 +6283,11 @@ MonoBehaviour:
       m_Calls: []
   m_FontData:
     m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
-    m_FontSize: 44
+    m_FontSize: 54
     m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 10
-    m_MaxSize: 48
+    m_MaxSize: 54
     m_Alignment: 4
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -7710,17 +7789,18 @@ RectTransform:
   - {fileID: 866566309}
   - {fileID: 696181504}
   - {fileID: 1739124566}
-  - {fileID: 1721547776}
-  - {fileID: 529670586}
-  - {fileID: 1171224235}
-  - {fileID: 1965965832}
   - {fileID: 1585933127}
+  - {fileID: 1721547776}
+  - {fileID: 1171224235}
+  - {fileID: 529670586}
+  - {fileID: 1965965832}
   - {fileID: 2084886627}
   - {fileID: 19125858}
   - {fileID: 851650610}
   - {fileID: 107900525}
   - {fileID: 1235909890}
   - {fileID: 1599220039}
+  - {fileID: 313054446}
   m_Father: {fileID: 1091840843}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -8651,6 +8731,7 @@ GameObject:
   - component: {fileID: 1585933127}
   - component: {fileID: 1585933128}
   - component: {fileID: 1585933129}
+  - component: {fileID: 1585933130}
   m_Layer: 0
   m_Name: CounterText
   m_TagString: Untagged
@@ -8674,8 +8755,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 740, y: 340}
-  m_SizeDelta: {x: 287, y: 176}
+  m_AnchoredPosition: {x: 0, y: 444}
+  m_SizeDelta: {x: 280, y: 140}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &1585933128
 CanvasRenderer:
@@ -8698,7 +8779,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
   m_Material: {fileID: 0}
-  m_Color: {r: 0.2901961, g: 0.627451, b: 0.7607843, a: 1}
+  m_Color: {r: 0.29, g: 0.63, b: 0.76, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -8707,11 +8788,11 @@ MonoBehaviour:
       m_Calls: []
   m_FontData:
     m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
-    m_FontSize: 96
+    m_FontSize: 110
     m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 10
-    m_MaxSize: 96
+    m_MaxSize: 110
     m_Alignment: 4
     m_AlignByGeometry: 0
     m_RichText: 1
@@ -8719,6 +8800,26 @@ MonoBehaviour:
     m_VerticalOverflow: 1
     m_LineSpacing: 1
   m_Text: 00
+--- !u!114 &1585933130
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1585933126}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 814c627f960b3104abdeec28449311de, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Taurus.Runtime.UI.CountTextEffect
+  _plusColor: {r: 0.45, g: 0.95, b: 1, a: 1}
+  _minusColor: {r: 1, g: 0.45, b: 0.4, a: 1}
+  _punchScale: 1.2
+  _punchSeconds: 0.22
+  _tintSeconds: 0.3
+  _floatOffset: {x: 215, y: -30}
+  _floatDistance: 36
+  _floatSeconds: 0.45
 --- !u!1 &1587324025
 GameObject:
   m_ObjectHideFlags: 0
@@ -10835,7 +10936,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: YOUR COUNT
+  m_Text: TIME
 --- !u!222 &1965965834
 CanvasRenderer:
   m_ObjectHideFlags: 0

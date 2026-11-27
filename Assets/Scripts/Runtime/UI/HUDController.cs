@@ -594,6 +594,12 @@ namespace Taurus.Runtime.UI
                 _minusPressEffect.Play();
             }
 
+            // カウントの数字にも、増減が見て分かる程度の控えめな演出を付ける
+            if (delta != 0 && _counterText != null && _counterText.TryGetComponent(out CountTextEffect countEffect))
+            {
+                countEffect.Play(delta);
+            }
+
             // 立ち絵もボタンを押すたびに「カチッ」とコマ送りで動かす
             if (delta != 0 && _characterPortrait != null)
             {
