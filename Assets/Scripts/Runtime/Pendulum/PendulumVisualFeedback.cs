@@ -31,6 +31,7 @@ namespace Taurus.Runtime.Pendulum
 
         [Header("Parent Bob（親玉）")]
         [SerializeField] private Transform _parentBob;
+        [SerializeField] private Transform _parentGlowAnchor;
         [SerializeField] private Renderer _parentBobMeshRenderer;
         [SerializeField] private SpriteRenderer _parentBobRenderer;
         [SerializeField, ColorUsage(false, true)] private Color _parentIdleEmissionColor = Color.black;
@@ -38,6 +39,7 @@ namespace Taurus.Runtime.Pendulum
 
         [Header("Child Bob（子玉：二重・三重振り子）")]
         [SerializeField] private Transform _childBob;
+        [SerializeField] private Transform _childGlowAnchor;
         [SerializeField] private Renderer _childBobMeshRenderer;
         [SerializeField] private SpriteRenderer _childBobRenderer;
         [SerializeField, ColorUsage(false, true)] private Color _childIdleEmissionColor = Color.black;
@@ -45,6 +47,7 @@ namespace Taurus.Runtime.Pendulum
 
         [Header("Grandchild Bob（孫玉：三重振り子のみ）")]
         [SerializeField] private Transform _grandchildBob;
+        [SerializeField] private Transform _grandchildGlowAnchor;
         [SerializeField] private Renderer _grandchildBobMeshRenderer;
         [SerializeField] private SpriteRenderer _grandchildBobRenderer;
         [SerializeField, ColorUsage(false, true)] private Color _grandchildIdleEmissionColor = Color.black;
@@ -127,9 +130,9 @@ namespace Taurus.Runtime.Pendulum
 
             if (ShouldUsePseudoGlow)
             {
-                _parentGlow = CreatePseudoGlowRig("WebGLBloom_Parent", _parentBob, _parentBobMeshRenderer);
-                _childGlow = CreatePseudoGlowRig("WebGLBloom_Child", _childBob, _childBobMeshRenderer);
-                _grandchildGlow = CreatePseudoGlowRig("WebGLBloom_Grandchild", _grandchildBob, _grandchildBobMeshRenderer);
+                _parentGlow = CreatePseudoGlowRig("WebGLBloom_Parent", _parentGlowAnchor, _parentBob, _parentBobMeshRenderer);
+                _childGlow = CreatePseudoGlowRig("WebGLBloom_Child", _childGlowAnchor, _childBob, _childBobMeshRenderer);
+                _grandchildGlow = CreatePseudoGlowRig("WebGLBloom_Grandchild", _grandchildGlowAnchor, _grandchildBob, _grandchildBobMeshRenderer);
             }
 
             // 起動直後から通常時エミッションカラーを反映する
@@ -200,7 +203,7 @@ namespace Taurus.Runtime.Pendulum
 
             if (ShouldUsePseudoGlow && _grandchildGlow == null)
             {
-                _grandchildGlow = CreatePseudoGlowRig("WebGLBloom_Grandchild", _grandchildBob, _grandchildBobMeshRenderer);
+                _grandchildGlow = CreatePseudoGlowRig("WebGLBloom_Grandchild", _grandchildGlowAnchor, _grandchildBob, _grandchildBobMeshRenderer);
             }
 
             ApplyFlashVisual(
@@ -303,9 +306,9 @@ namespace Taurus.Runtime.Pendulum
             }
 
             UnityEngine.Camera cam = UnityEngine.Camera.main;
-            UpdatePseudoGlowTransform(_parentGlow, _parentBob, _parentBobMeshRenderer, cam, _parentFlashTimer / FLASH_DURATION);
-            UpdatePseudoGlowTransform(_childGlow, _childBob, _childBobMeshRenderer, cam, _childFlashTimer / FLASH_DURATION);
-            UpdatePseudoGlowTransform(_grandchildGlow, _grandchildBob, _grandchildBobMeshRenderer, cam, _grandchildFlashTimer / FLASH_DURATION);
+            UpdatePseudoGlowTransform(_parentGlow, _parentGlowAnchor, _parentBob, _parentBobMeshRenderer, cam, _parentFlashTimer / FLASH_DURATION);
+            UpdatePseudoGlowTransform(_childGlow, _childGlowAnchor, _childBob, _childBobMeshRenderer, cam, _childFlashTimer / FLASH_DURATION);
+            UpdatePseudoGlowTransform(_grandchildGlow, _grandchildGlowAnchor, _grandchildBob, _grandchildBobMeshRenderer, cam, _grandchildFlashTimer / FLASH_DURATION);
         }
 
         private void HandleBobTopCrossed(PendulumMotion pendulum, int bobTier, int crossedCount)
@@ -462,9 +465,9 @@ namespace Taurus.Runtime.Pendulum
             }
         }
 
-        private PseudoGlowRig CreatePseudoGlowRig(string rigName, Transform bob, Renderer meshRenderer)
+        private PseudoGlowRig CreatePseudoGlowRig(string rigName, Transform glowAnchor, Transform bob, Renderer meshRenderer)
         {
-            if (bob == null && meshRenderer == null)
+            if (glowAnchor == null && bob == null && meshRenderer == null)
             {
                 return null;
             }
@@ -572,6 +575,7 @@ namespace Taurus.Runtime.Pendulum
 
         private void UpdatePseudoGlowTransform(
             PseudoGlowRig rig,
+            Transform glowAnchor,
             Transform bob,
             Renderer meshRenderer,
             UnityEngine.Camera cam,
@@ -583,7 +587,16 @@ namespace Taurus.Runtime.Pendulum
             }
 
             Vector3 worldPos;
-            if (meshRenderer != null)
+            if (glowAnchor != null)
+            {
+                // 各玉に配置された専用アンカー（Trail 位置など）があれば最優先で正確な玉中心を使う
+                worldPos = glowAnchor.position;
+            }
+            else if (bob != null)
+            {
+                worldPos = bob.position;
+            }
+            else if (meshRenderer != null)
             {
                 Bounds bounds = meshRenderer.bounds;
                 worldPos = bounds.center;
@@ -593,10 +606,6 @@ namespace Taurus.Runtime.Pendulum
                 {
                     rig.EstimatedRadius = Mathf.Clamp(avgExt, 0.35f, 0.85f);
                 }
-            }
-            else if (bob != null)
-            {
-                worldPos = bob.position;
             }
             else
             {

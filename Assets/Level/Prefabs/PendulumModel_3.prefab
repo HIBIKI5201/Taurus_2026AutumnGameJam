@@ -64,16 +64,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Taurus.Runtime.Pendulum.PendulumVisualFeedback
   _parentBob: {fileID: 0}
+  _parentGlowAnchor: {fileID: 3740377704202148381}
   _parentBobMeshRenderer: {fileID: 4700261007149078679}
   _parentBobRenderer: {fileID: 0}
   _parentIdleEmissionColor: {r: 2.596737, g: 2.3065453, b: 0.48505065, a: 1}
   _parentFlashEmissionColor: {r: 4.724474, g: 6, b: 0.06013695, a: 6}
   _childBob: {fileID: 0}
+  _childGlowAnchor: {fileID: 2431364284292729282}
   _childBobMeshRenderer: {fileID: 4609935385493977618}
   _childBobRenderer: {fileID: 0}
   _childIdleEmissionColor: {r: 1, g: 0.016336443, b: 0, a: 1}
   _childFlashEmissionColor: {r: 6, g: 0.2380915, b: 0.023615638, a: 6}
   _grandchildBob: {fileID: 0}
+  _grandchildGlowAnchor: {fileID: 354182831669367095}
   _grandchildBobMeshRenderer: {fileID: 683292596124236693}
   _grandchildBobRenderer: {fileID: 0}
   _grandchildIdleEmissionColor: {r: 0, g: 0, b: 0, a: 1}
