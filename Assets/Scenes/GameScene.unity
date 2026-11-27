@@ -676,7 +676,7 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 36
+  m_fontSize: 32
   m_fontSizeBase: 36
   m_fontWeight: 400
   m_enableAutoSizing: 1
@@ -2250,12 +2250,12 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 36
+  m_fontSize: 32
   m_fontSizeBase: 36
   m_fontWeight: 400
   m_enableAutoSizing: 1
@@ -8722,7 +8722,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 640, y: -486}
+  m_AnchoredPosition: {x: -364, y: -486}
   m_SizeDelta: {x: 500, y: 88}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1469667779
@@ -8776,7 +8776,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Taurus.Runtime.UI.VoiceLineBubble
   _lineText: {fileID: 56813416}
-  _extraHoldSeconds: 0.8
+  _baseDisplaySeconds: 1
+  _secondsPerCharacter: 0.08
+  _minDisplaySeconds: 1.5
+  _maxDisplaySeconds: 6
+  _extraHoldSeconds: 0.4
   _fadeSeconds: 0.15
 --- !u!225 &1469667782
 CanvasGroup:
@@ -8786,9 +8790,9 @@ CanvasGroup:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1469667777}
   m_Enabled: 1
-  m_Alpha: 1
-  m_Interactable: 1
-  m_BlocksRaycasts: 1
+  m_Alpha: 0
+  m_Interactable: 0
+  m_BlocksRaycasts: 0
   m_IgnoreParentGroups: 0
 --- !u!1 &1473504146
 GameObject:
@@ -13101,7 +13105,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 640, y: -486}
+  m_AnchoredPosition: {x: -364, y: -486}
   m_SizeDelta: {x: 500, y: 88}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2132630701
@@ -13117,7 +13121,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Taurus.Runtime.UI.VoiceLineBubble
   _lineText: {fileID: 409901149}
-  _extraHoldSeconds: 0.8
+  _baseDisplaySeconds: 1
+  _secondsPerCharacter: 0.08
+  _minDisplaySeconds: 1.5
+  _maxDisplaySeconds: 6
+  _extraHoldSeconds: 0.4
   _fadeSeconds: 0.15
 --- !u!225 &2132630702
 CanvasGroup:
@@ -13127,9 +13135,9 @@ CanvasGroup:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2132630699}
   m_Enabled: 1
-  m_Alpha: 1
-  m_Interactable: 1
-  m_BlocksRaycasts: 1
+  m_Alpha: 0
+  m_Interactable: 0
+  m_BlocksRaycasts: 0
   m_IgnoreParentGroups: 0
 --- !u!114 &2132630703
 MonoBehaviour:

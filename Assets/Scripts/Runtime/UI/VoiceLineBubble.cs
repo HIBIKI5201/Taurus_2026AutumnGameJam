@@ -6,16 +6,22 @@ using UnityEngine;
 namespace Taurus.Runtime.UI
 {
     /// <summary>
-    ///     ボイスが鳴ったとき、そのボイスに対応するセリフを吹き出しに出す。
-    ///     画面（パネル）ごとに置き、表示中の画面の吹き出しだけが反応する。セリフが空のボイスでは出さない。
+    ///     ボイスが鳴ったときだけ吹き出しを表示し、文字数とボイス長に応じた時間のあいだセリフを出す。
+    ///     SpeechBubble 自身に付け、親パネルや他 UI には一切影響しない。セリフが空のボイスでは出さない。
     /// </summary>
     [RequireComponent(typeof(CanvasGroup))]
     public class VoiceLineBubble : MonoBehaviour
     {
         [SerializeField] private TMP_Text _lineText;
 
-        // ボイスが終わってからも少し残しておく秒数
-        [SerializeField, Min(0f)] private float _extraHoldSeconds = 0.8f;
+        // 文字数に応じた表示時間の計算用（基準秒数 + 1文字あたりの秒数）
+        [SerializeField, Min(0f)] private float _baseDisplaySeconds = 1.0f;
+        [SerializeField, Min(0f)] private float _secondsPerCharacter = 0.08f;
+        [SerializeField, Min(0f)] private float _minDisplaySeconds = 1.5f;
+        [SerializeField, Min(0f)] private float _maxDisplaySeconds = 6.0f;
+
+        // ボイスが終わってからも少し残しておく秒数（文字数計算よりボイスの方が長いときの下限）
+        [SerializeField, Min(0f)] private float _extraHoldSeconds = 0.4f;
         [SerializeField, Min(0.01f)] private float _fadeSeconds = 0.15f;
 
         private CanvasGroup _group;
@@ -29,23 +35,24 @@ namespace Taurus.Runtime.UI
         {
             _group = GetComponent<CanvasGroup>();
             _baseScale = transform.localScale;
-            _group.alpha = 0f;
+            HideImmediate();
         }
 
         private void OnEnable()
         {
+            if (_group == null)
+            {
+                _group = GetComponent<CanvasGroup>();
+            }
+
+            HideImmediate();
             GameAudioHooks.OnVoiceLinePlayed += HandleVoiceLinePlayed;
         }
 
         private void OnDisable()
         {
             GameAudioHooks.OnVoiceLinePlayed -= HandleVoiceLinePlayed;
-            CancelMotions();
-            _isShowing = false;
-            if (_group != null)
-            {
-                _group.alpha = 0f;
-            }
+            HideImmediate();
         }
 
         private void Update()
@@ -70,11 +77,15 @@ namespace Taurus.Runtime.UI
             }
 
             _lineText.text = line;
-            _hideAt = Time.unscaledTime + voiceSeconds + _extraHoldSeconds;
+            float displaySeconds = CalculateDisplaySeconds(line, voiceSeconds);
+            _hideAt = Time.unscaledTime + displaySeconds;
             _isShowing = true;
 
-            // ぽんと出す：少し小さい所から弾ませ、同時にフェードイン
+            // ぽんと出す：吹き出し自身だけを少し小さい所から弾ませ、同時にフェードイン
             CancelMotions();
+            _group.alpha = 0f;
+            _group.blocksRaycasts = false;
+            _group.interactable = false;
             transform.localScale = _baseScale * 0.85f;
             _showHandle = LMotion.Create(0f, 1f, 0.22f)
                 .WithEase(Ease.OutBack)
@@ -86,13 +97,44 @@ namespace Taurus.Runtime.UI
                 });
         }
 
+        private float CalculateDisplaySeconds(string line, float voiceSeconds)
+        {
+            int charCount = string.IsNullOrEmpty(line) ? 0 : line.Trim().Length;
+            float byLength = _baseDisplaySeconds + charCount * _secondsPerCharacter;
+            float byVoice = Mathf.Max(0f, voiceSeconds) + _extraHoldSeconds;
+            float duration = Mathf.Max(byLength, byVoice);
+            float maxSeconds = Mathf.Max(_minDisplaySeconds, _maxDisplaySeconds);
+            return Mathf.Clamp(duration, _minDisplaySeconds, maxSeconds);
+        }
+
         private void Hide()
         {
             _isShowing = false;
             CancelMotions();
             _hideHandle = LMotion.Create(_group.alpha, 0f, _fadeSeconds)
                 .WithScheduler(MotionScheduler.UpdateIgnoreTimeScale)
+                .WithOnComplete(() =>
+                {
+                    if (_group != null)
+                    {
+                        _group.alpha = 0f;
+                    }
+                })
                 .Bind(_group, static (a, g) => g.alpha = a);
+        }
+
+        private void HideImmediate()
+        {
+            CancelMotions();
+            _isShowing = false;
+            if (_group != null)
+            {
+                _group.alpha = 0f;
+                _group.blocksRaycasts = false;
+                _group.interactable = false;
+            }
+
+            transform.localScale = _baseScale;
         }
 
         private void CancelMotions()
