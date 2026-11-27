@@ -9,13 +9,13 @@ Shader "Taurus/VFX/NeonTrail"
         [HDR] _ColorA ("Line Color A (外側)", Color) = (0.2, 0.95, 1.0, 1)
         [HDR] _ColorB ("Line Color B", Color) = (1.0, 0.25, 0.75, 1)
         [HDR] _ColorC ("Line Color C (内側)", Color) = (0.65, 0.3, 1.0, 1)
-        _Intensity ("Intensity (HDR)", Range(0, 16)) = 6
+        _Intensity ("Intensity (HDR)", Range(0, 16)) = 4
         _LineCount ("Line Count", Range(1, 6)) = 4
         _LineWidth ("Line Width (幅に対する比率)", Range(0.005, 0.2)) = 0.022
         _GlowWidth ("Glow Width", Range(0.01, 0.5)) = 0.1
         _GlowStrength ("Glow Strength", Range(0, 2)) = 0.9
         _CoreWhiteness ("Core Whiteness (線の芯を白く)", Range(0, 1)) = 0.2
-        _HeadSpread ("Head Spread (玉側での線の広がり)", Range(0, 1)) = 0.25
+        _HeadSpread ("Head Spread (玉側での線の広がり)", Range(0, 1)) = 0.45
         _TailPower ("Tail Fade Power", Range(0.3, 4)) = 1.4
         _TailStagger ("Tail Stagger (線ごとの尾の長さのずれ)", Range(0, 0.5)) = 0.14
         _Wave ("Wave Amount", Range(0, 0.1)) = 0.025
