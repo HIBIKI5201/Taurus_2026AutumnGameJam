@@ -615,10 +615,11 @@ namespace Taurus.Runtime.UI
             }
 
             // 上部バナーと下部テキストの視線分散を防ぐため、_successBanner がある場合はバナー側へ表示を統一する
+            int clearedWave = Mathf.Max(1, nextWave - 1);
             Text bannerText = _successBanner != null ? _successBanner.GetComponentInChildren<Text>(true) : null;
             if (bannerText != null)
             {
-                bannerText.text = L10n.Format("game.successBanner", expectedCount, nextWave);
+                bannerText.text = L10n.Format("game.successBanner", clearedWave);
                 PlayScalePop(_successBanner.transform, 0.86f, 0.24f);
                 if (_feedbackText != null)
                 {
@@ -627,7 +628,7 @@ namespace Taurus.Runtime.UI
             }
             else if (_feedbackText != null)
             {
-                _feedbackText.text = L10n.Format("game.successFeedback", expectedCount);
+                _feedbackText.text = L10n.Format("game.successFeedback", clearedWave);
             }
 
             // 成功メッセージは次Waveの開始（HandleWaveStarted）まで表示し続ける
