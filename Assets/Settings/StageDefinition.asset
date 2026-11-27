@@ -373,10 +373,10 @@ MonoBehaviour:
     _timeQuantizationStep: 1
     _useWaveQuantityConstraint: 1
     _waveMinQuantity: 2
-    _waveMaxQuantity: 3
+    _waveMaxQuantity: 5
     _intervals:
     - _label: "\u524D\u534A(\u5E73\u5766)"
-      _durationSeconds: 4
+      _durationSeconds: 1
       _useQuantityConstraint: 1
       _minQuantity: 1
       _maxQuantity: 2
@@ -391,7 +391,7 @@ MonoBehaviour:
         _topCount: 2
         _durationSeconds: 1
     - _label: "\u5F8C\u534A(\u5E73\u5766)"
-      _durationSeconds: 4
+      _durationSeconds: 7
       _useQuantityConstraint: 1
       _minQuantity: 1
       _maxQuantity: 2
@@ -424,56 +424,47 @@ MonoBehaviour:
     _timeQuantizationStep: 1
     _useWaveQuantityConstraint: 1
     _waveMinQuantity: 2
-    _waveMaxQuantity: 4
+    _waveMaxQuantity: 5
     _intervals:
-    - _label: "\u5E8F\u76E4(\u4F4E)"
-      _durationSeconds: 3
-      _useQuantityConstraint: 1
-      _minQuantity: 0
-      _maxQuantity: 1
-      _choices:
-      - _weight: 78
-        _topCount: 0
-        _durationSeconds: 1
-      - _weight: 22
-        _topCount: 1
-        _durationSeconds: 1
-    - _label: "\u4E2D\u76E4(\u4E2D)"
-      _durationSeconds: 3
+    - _label: "\u524D\u534A(\u5E73\u5766)"
+      _durationSeconds: 1
       _useQuantityConstraint: 1
       _minQuantity: 1
       _maxQuantity: 2
       _choices:
-      - _weight: 64
+      - _weight: 60
         _topCount: 0
         _durationSeconds: 1
-      - _weight: 32
-        _topCount: 1
-        _durationSeconds: 1
-      - _weight: 4
-        _topCount: 2
-        _durationSeconds: 1
-    - _label: "\u7D42\u76E4(\u9AD8)"
-      _durationSeconds: 2
-      _useQuantityConstraint: 1
-      _minQuantity: 1
-      _maxQuantity: 2
-      _choices:
-      - _weight: 50
-        _topCount: 0
-        _durationSeconds: 1
-      - _weight: 40
+      - _weight: 30
         _topCount: 1
         _durationSeconds: 1
       - _weight: 10
         _topCount: 2
         _durationSeconds: 1
+    - _label: "\u5F8C\u534A(\u5E73\u5766)"
+      _durationSeconds: 7
+      _useQuantityConstraint: 1
+      _minQuantity: 1
+      _maxQuantity: 2
+      _choices:
+      - _weight: 72
+        _topCount: 0
+        _durationSeconds: 1
+      - _weight: 26
+        _topCount: 1
+        _durationSeconds: 1
+      - _weight: 2
+        _topCount: 2
+        _durationSeconds: 1
     _choices:
-    - _weight: 78
+    - _weight: 74
       _topCount: 0
       _durationSeconds: 1
-    - _weight: 22
+    - _weight: 24
       _topCount: 1
+      _durationSeconds: 1
+    - _weight: 2
+      _topCount: 2
       _durationSeconds: 1
   - _singlePendulumCount: 0
     _doublePendulumCount: 1
@@ -484,7 +475,7 @@ MonoBehaviour:
     _timeQuantizationStep: 1
     _useWaveQuantityConstraint: 1
     _waveMinQuantity: 2
-    _waveMaxQuantity: 4
+    _waveMaxQuantity: 5
     _intervals:
     - _label: "\u5E8F\u76E4(\u4F4E)"
       _durationSeconds: 3
@@ -536,7 +527,7 @@ MonoBehaviour:
       _topCount: 1
       _durationSeconds: 1
   - _singlePendulumCount: 0
-    _doublePendulumCount: 1
+    _doublePendulumCount: 2
     _triplePendulumCount: 0
     _startTimeSeconds: 0
     _endTimeSeconds: 8
@@ -602,7 +593,7 @@ MonoBehaviour:
     _doublePendulumCount: 2
     _triplePendulumCount: 0
     _startTimeSeconds: 0
-    _endTimeSeconds: 5
+    _endTimeSeconds: 8
     _stopRule: 0
     _timeQuantizationStep: 1
     _useWaveQuantityConstraint: 1
@@ -653,7 +644,7 @@ MonoBehaviour:
     _doublePendulumCount: 0
     _triplePendulumCount: 1
     _startTimeSeconds: 0
-    _endTimeSeconds: 7
+    _endTimeSeconds: 8
     _stopRule: 0
     _timeQuantizationStep: 1
     _useWaveQuantityConstraint: 1
@@ -661,7 +652,7 @@ MonoBehaviour:
     _waveMaxQuantity: 3
     _intervals:
     - _label: "\u5E8F\u76E4(\u9759)"
-      _durationSeconds: 2
+      _durationSeconds: 3
       _useQuantityConstraint: 1
       _minQuantity: 0
       _maxQuantity: 1
@@ -674,9 +665,9 @@ MonoBehaviour:
         _durationSeconds: 1
       - _weight: 5
         _topCount: 2
-        _durationSeconds: 2
+        _durationSeconds: 1
     - _label: "\u4E2D\u76E4(\u52A0\u901F)"
-      _durationSeconds: 2
+      _durationSeconds: 1
       _useQuantityConstraint: 1
       _minQuantity: 1
       _maxQuantity: 2
@@ -691,7 +682,7 @@ MonoBehaviour:
         _topCount: 2
         _durationSeconds: 1
     - _label: "\u7D42\u76E4(\u6025\u9A30)"
-      _durationSeconds: 3
+      _durationSeconds: 4
       _useQuantityConstraint: 1
       _minQuantity: 1
       _maxQuantity: 2
@@ -701,10 +692,10 @@ MonoBehaviour:
         _durationSeconds: 1
       - _weight: 53
         _topCount: 1
-        _durationSeconds: 2
+        _durationSeconds: 1
       - _weight: 7
         _topCount: 2
-        _durationSeconds: 2
+        _durationSeconds: 1
     _choices:
     - _weight: 78
       _topCount: 0
