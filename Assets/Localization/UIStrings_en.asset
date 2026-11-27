@@ -58,7 +58,8 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 4840783879
-    m_Localized: '[SPACE] +1    /    [CTRL] -1    /    10 sec per wave'
+    m_Localized: <sprite name="space"> +1    /    <sprite name="ctrl"> -1    /   
+      10 sec per wave
     m_Metadata:
       m_Items: []
   - m_Id: 4840783880
@@ -74,7 +75,7 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 4840783883
-    m_Localized: You can also close with SPACE / ESC
+    m_Localized: You can also close with <sprite name="space"> / <sprite name="esc">
     m_Metadata:
       m_Items: []
   - m_Id: 4840783884
