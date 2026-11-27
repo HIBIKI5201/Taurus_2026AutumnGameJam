@@ -128,6 +128,9 @@ namespace Taurus.Runtime.Game
         /// <summary> リザルト画面のリプレイで、答えのカウントが変わったときに発行される（リプレイ中の通過数, 正解数）。 </summary>
         public event Action<int, int> OnReplayCountChanged;
 
+        /// <summary> プレイ中に Esc で途中終了（リタイア）したときに、リザルトへ移る直前に発行される。 </summary>
+        public event Action OnRunRetired;
+
         /// <summary> 現在のゲーム状態。 </summary>
         public GamePhase CurrentPhase => _currentPhase;
 
@@ -383,6 +386,7 @@ namespace Taurus.Runtime.Game
         {
             if (_currentPhase == GamePhase.Playing)
             {
+                OnRunRetired?.Invoke();
                 FinishRun();
             }
         }
