@@ -229,7 +229,12 @@ namespace Taurus.Runtime.UI
 
             if (_quitButton != null)
             {
+#if UNITY_WEBGL && !UNITY_EDITOR
+                // WebGL（unityroom 等）では Application.Quit が機能しないため終了ボタンを非表示にする
+                _quitButton.gameObject.SetActive(false);
+#else
                 _quitButton.onClick.AddListener(HandleQuitClicked);
+#endif
             }
 
             if (_retryButton != null)
