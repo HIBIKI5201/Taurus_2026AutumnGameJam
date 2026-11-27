@@ -149,11 +149,10 @@ namespace Taurus.Runtime.Camera
                     break;
                 case GamePhase.Playing:
                 case GamePhase.Success:
+                // リザルト画面では失敗したWaveをリプレイするので、プレイ中と同じ画角で振り子を画面中央に映す
+                case GamePhase.Result:
                     bool isDual = controller.ActivePendulums != null && controller.ActivePendulums.Count >= 2;
                     ActivateCamera(isDual ? _gameDualCamera : _gameSingleCamera);
-                    break;
-                case GamePhase.Result:
-                    ActivateCamera(_resultCamera);
                     break;
             }
         }

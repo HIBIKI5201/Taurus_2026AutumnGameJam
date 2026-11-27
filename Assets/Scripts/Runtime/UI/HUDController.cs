@@ -70,6 +70,10 @@ namespace Taurus.Runtime.UI
         [SerializeField] private Color _clearedWavesColor = new Color(0.29f, 0.63f, 0.76f, 1f);
         [SerializeField] private Text[] _recordValueTexts; // 要素0=1ST, 1=2ND, 2=3RD
         [SerializeField] private Button _retryButton;
+
+        // リザルト画面中央の、リプレイに合わせて数え上がる答えのカウンター
+        [SerializeField] private Text _replayCountText;
+        [SerializeField] private RectTransform _replayCounterRoot;
         [SerializeField] private Button _homeButton;
 
         [Header("Wave Transition Fade（UIの背面に描画しUIを隠さない暗転）")]
@@ -85,6 +89,7 @@ namespace Taurus.Runtime.UI
         private float _feedbackHideTimer;
         private MotionHandle _waveFadeMotionHandle;
         private MotionHandle _popMotionHandle;
+        private MotionHandle _replayPopMotionHandle;
         private ButtonPressEffect _plusPressEffect;
         private ButtonPressEffect _minusPressEffect;
         private readonly Dictionary<GameObject, MotionHandle> _panelMotionHandles = new Dictionary<GameObject, MotionHandle>();
@@ -125,6 +130,7 @@ namespace Taurus.Runtime.UI
         {
             CancelWaveFadeMotion();
             CancelPopMotion();
+            CancelReplayPopMotion();
             CancelPanelMotions();
             UnbindGameController();
             ServiceLocator.UnregisterInstance(this);
@@ -261,6 +267,7 @@ namespace Taurus.Runtime.UI
             _subscribedController.OnPlayerCountChanged += HandlePlayerCountChanged;
             _subscribedController.OnWaveSucceeded += HandleWaveSucceeded;
             _subscribedController.OnGameFinished += HandleGameFinished;
+            _subscribedController.OnReplayCountChanged += HandleReplayCountChanged;
 
             SyncInitialState();
         }
@@ -279,6 +286,7 @@ namespace Taurus.Runtime.UI
             _subscribedController.OnPlayerCountChanged -= HandlePlayerCountChanged;
             _subscribedController.OnWaveSucceeded -= HandleWaveSucceeded;
             _subscribedController.OnGameFinished -= HandleGameFinished;
+            _subscribedController.OnReplayCountChanged -= HandleReplayCountChanged;
             _subscribedController = null;
         }
 
@@ -645,6 +653,41 @@ namespace Taurus.Runtime.UI
             }
 
             return isNewRecord ? $"★ NEW RECORD ★  {rank}" : rank;
+        }
+
+        // リプレイで真上を通過するたびに答えのカウンターを進め、数字を弾ませる
+        private void HandleReplayCountChanged(int replayCount, int expectedCount)
+        {
+            if (_replayCountText != null)
+            {
+                _replayCountText.text = replayCount.ToString("00");
+            }
+
+            if (replayCount <= 0 || _replayCounterRoot == null)
+            {
+                return;
+            }
+
+            CancelReplayPopMotion();
+            _replayCounterRoot.localScale = Vector3.one * 1.18f;
+            _replayPopMotionHandle = LMotion.Create(1.18f, 1f, 0.25f)
+                .WithEase(Ease.OutBack)
+                .WithScheduler(MotionScheduler.UpdateIgnoreTimeScale)
+                .Bind(_replayCounterRoot, static (scale, tr) =>
+                {
+                    if (tr != null)
+                    {
+                        tr.localScale = Vector3.one * scale;
+                    }
+                });
+        }
+
+        private void CancelReplayPopMotion()
+        {
+            if (_replayPopMotionHandle.IsActive())
+            {
+                _replayPopMotionHandle.Cancel();
+            }
         }
 
         private void PlayScalePop(Transform target, float startScale, float duration)
