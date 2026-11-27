@@ -48,9 +48,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Taurus.Runtime.Pendulum.PendulumMotion
   _parentArm: {fileID: 7742845905853440253}
   _childArm: {fileID: 8127199808762840620}
-  _grandchildArm: {fileID: 0}
+  _grandchildArm: {fileID: 6606267170806610028}
   _isDoublePendulum: 1
-  _isTriplePendulum: 0
+  _isTriplePendulum: 1
 --- !u!114 &6471254585014529178
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -74,7 +74,7 @@ MonoBehaviour:
   _childIdleEmissionColor: {r: 0, g: 0, b: 0, a: 1}
   _childFlashEmissionColor: {r: 6, g: 0.2380915, b: 0.023615638, a: 6}
   _grandchildBob: {fileID: 0}
-  _grandchildBobMeshRenderer: {fileID: 0}
+  _grandchildBobMeshRenderer: {fileID: 683292596124236693}
   _grandchildBobRenderer: {fileID: 0}
   _grandchildIdleEmissionColor: {r: 0, g: 0, b: 0, a: 1}
   _grandchildFlashEmissionColor: {r: 0.06013695, g: 4.965426, b: 6, a: 6}
@@ -658,6 +658,11 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 4530101182296483500}
   m_SourcePrefab: {fileID: 100100000, guid: ece82635e5dc519478c5548f6d3b8e64, type: 3}
+--- !u!137 &683292596124236693 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 7191124673831957796, guid: ece82635e5dc519478c5548f6d3b8e64, type: 3}
+  m_PrefabInstance: {fileID: 7689767946678128305}
+  m_PrefabAsset: {fileID: 0}
 --- !u!137 &4609935385493977618 stripped
 SkinnedMeshRenderer:
   m_CorrespondingSourceObject: {fileID: -3076436852057541469, guid: ece82635e5dc519478c5548f6d3b8e64, type: 3}
@@ -676,7 +681,7 @@ TrailRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4663767762837190720}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 0
   m_ReceiveShadows: 0
   m_DynamicOccludee: 1
@@ -805,7 +810,7 @@ TrailRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4865513300817608752}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 0
   m_ReceiveShadows: 0
   m_DynamicOccludee: 1
@@ -954,7 +959,7 @@ TrailRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8279376239760310191}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 0
   m_ReceiveShadows: 0
   m_DynamicOccludee: 1

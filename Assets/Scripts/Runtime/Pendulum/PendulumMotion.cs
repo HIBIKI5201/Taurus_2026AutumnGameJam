@@ -80,6 +80,9 @@ namespace Taurus.Runtime.Pendulum
         public bool IsDoublePendulum => (_isDoublePendulum || _isTriplePendulum) && _childArm != null && _childSchedule != null;
 
         /// <summary> 三重振り子として稼働しているかどうか。 </summary>
+        /// <summary> プレハブ側に孫の腕（3段目）が用意されているか。 </summary>
+        public bool HasGrandchildArm => _grandchildArm != null;
+
         public bool IsTriplePendulum => _isTriplePendulum && _grandchildArm != null && _grandchildSchedule != null;
 
         /// <summary> 親玉のスケジュール。 </summary>

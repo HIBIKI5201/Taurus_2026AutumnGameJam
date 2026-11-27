@@ -7977,7 +7977,7 @@ MonoBehaviour:
   _stageDefinition: {fileID: 11400000, guid: 18f7fe472748a2d4ea7ea2fdcfc0b691, type: 2}
   _singlePendulumPrefab: {fileID: 1565821431886764073, guid: e6c724df966cafc458612bee0fc42f58, type: 3}
   _doublePendulumPrefab: {fileID: 641621880846825849, guid: 6aa5119dfe00f79428485def75c271d8, type: 3}
-  _triplePendulumPrefab: {fileID: 0}
+  _triplePendulumPrefab: {fileID: 417965890977358056, guid: 482ff4b1812667e4f94f231913ee0ef8, type: 3}
   _useFixedSeed: 0
   _fixedSeed: 123456789
 --- !u!114 &1437390484
