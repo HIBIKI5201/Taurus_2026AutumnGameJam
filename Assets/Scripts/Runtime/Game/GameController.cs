@@ -80,6 +80,9 @@ namespace Taurus.Runtime.Game
         // アウトゲーム画面が消えるのを待ってから Wave 1 を始めるまでの間 true（二重開始を防ぐ）
         private bool _isStartingRun;
 
+        // クレジット画面などを重ねて開いている間 true。キー入力を止める
+        private bool _isOverlayOpen;
+
         // リザルト画面で、失敗したWaveを繰り返し再生している間 true
         private bool _isReplaying;
 
@@ -297,18 +300,39 @@ namespace Taurus.Runtime.Game
             }
         }
 
+        /// <summary> クレジット画面などを重ねて開いている間はキー入力を止める（HUDController から設定する）。 </summary>
+        public void SetOverlayOpen(bool isOpen)
+        {
+            _isOverlayOpen = isOpen;
+        }
+
         private void HandleCountUpPerformed(InputAction.CallbackContext context)
         {
+            if (_isOverlayOpen)
+            {
+                return;
+            }
+
             HandleSpaceInput();
         }
 
         private void HandleCountDownPerformed(InputAction.CallbackContext context)
         {
+            if (_isOverlayOpen)
+            {
+                return;
+            }
+
             HandleCtrlInput();
         }
 
         private void HandleCancelPerformed(InputAction.CallbackContext context)
         {
+            if (_isOverlayOpen)
+            {
+                return;
+            }
+
             HandleEscapeInput();
         }
 

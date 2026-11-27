@@ -51,6 +51,8 @@ namespace Taurus.Runtime.UI
         [SerializeField] private Image _startMeterFill; // Image.Type = Filled（Horizontal）を想定
         [SerializeField] private Button _titleStartButton;
         [SerializeField] private Button _quitButton;
+        [SerializeField] private Button _creditsButton;
+        [SerializeField] private CreditsPanel _creditsPanel;
 
         [Header("Rules UI")]
         [SerializeField] private Button _rulesStartButton;
@@ -205,6 +207,16 @@ namespace Taurus.Runtime.UI
             {
                 _minusButton.onClick.AddListener(HandleMinusButtonClicked);
                 _minusPressEffect = _minusButton.GetComponent<ButtonPressEffect>();
+            }
+
+            if (_creditsButton != null)
+            {
+                _creditsButton.onClick.AddListener(HandleCreditsClicked);
+            }
+
+            if (_creditsPanel != null)
+            {
+                _creditsPanel.OnVisibilityChanged += HandleCreditsVisibilityChanged;
             }
 
             if (_quitButton != null)
@@ -858,6 +870,26 @@ namespace Taurus.Runtime.UI
         private void HandleMinusButtonClicked()
         {
             ActiveController?.HandleCtrlInput();
+        }
+
+        private void HandleCreditsClicked()
+        {
+            ButtonPressEffect effect = _creditsButton.GetComponent<ButtonPressEffect>();
+            if (effect != null)
+            {
+                effect.Play();
+            }
+
+            _creditsPanel.Open();
+        }
+
+        // クレジット画面を開いている間は、裏のタイトル画面がキー入力で進まないようにする
+        private void HandleCreditsVisibilityChanged(bool isOpen)
+        {
+            if (ActiveController != null)
+            {
+                ActiveController.SetOverlayOpen(isOpen);
+            }
         }
 
         private void HandleQuitClicked()
