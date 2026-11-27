@@ -81,7 +81,7 @@ TrailRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Time: 0.5
+  m_Time: 0.2
   m_PreviewTimeScale: 1
   m_Parameters:
     serializedVersion: 3
@@ -217,17 +217,17 @@ MonoBehaviour:
   _parentBob: {fileID: 0}
   _parentBobMeshRenderer: {fileID: 252562121816610870}
   _parentBobRenderer: {fileID: 0}
-  _parentIdleEmissionColor: {r: 0, g: 0, b: 0, a: 1}
-  _parentFlashEmissionColor: {r: 0.41189435, g: 6.422235, b: 0, a: 6}
+  _parentIdleEmissionColor: {r: 0.7490196, g: 0.5154362, b: 0.21905282, a: 1}
+  _parentFlashEmissionColor: {r: 4.974516, g: 8.250632, b: 0, a: 6}
   _childBob: {fileID: 0}
   _childBobMeshRenderer: {fileID: 0}
   _childBobRenderer: {fileID: 0}
-  _childIdleEmissionColor: {r: 1351.1757, g: 0, b: 0, a: 1}
+  _childIdleEmissionColor: {r: 0.7490196, g: 0, b: 0, a: 1}
   _childFlashEmissionColor: {r: 653.0414, g: 21.279863, b: 0, a: 6}
   _grandchildBob: {fileID: 0}
   _grandchildBobMeshRenderer: {fileID: 0}
   _grandchildBobRenderer: {fileID: 0}
-  _grandchildIdleEmissionColor: {r: 0, g: 37.14209, b: 1024, a: 1}
+  _grandchildIdleEmissionColor: {r: 0, g: 0.027168121, b: 0.7490197, a: 1}
   _grandchildFlashEmissionColor: {r: 0, g: 850.62445, b: 1023.9999, a: 6}
 --- !u!1001 &4069362517419432357
 PrefabInstance:
@@ -297,6 +297,10 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: -4902167853688815213, guid: ece82635e5dc519478c5548f6d3b8e64, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 6a150c3ea02af0b4aa4c52e7ec17c12b, type: 2}
     - target: {fileID: 919132149155446097, guid: ece82635e5dc519478c5548f6d3b8e64, type: 3}
       propertyPath: m_Name
       value: Model

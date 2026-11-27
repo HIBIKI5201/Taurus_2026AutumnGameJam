@@ -555,7 +555,7 @@ namespace Taurus.Runtime.Game
                     ? $"PendulumTriple_{i + 1:00}"
                     : (isDouble ? $"PendulumDouble_{i + 1:00}" : $"PendulumSingle_{i + 1:00}");
 
-                if (isTriple && instance.EnsureGrandchildRig(out Transform grandBob, out Renderer grandRenderer))
+                if (isTriple && !instance.HasGrandchildArm && instance.EnsureGrandchildRig(out Transform grandBob, out Renderer grandRenderer))
                 {
                     PendulumVisualFeedback feedback = instance.GetComponent<PendulumVisualFeedback>();
                     if (feedback != null)
