@@ -423,7 +423,6 @@ namespace Taurus.Runtime.Game
 
             source.PlayOneShot(playable, Mathf.Clamp(_voiceVolumeScale * volume, 0f, 1.5f));
             float seconds = playable.length / Mathf.Max(0.01f, Mathf.Abs(source.pitch));
-            DuckBgm(seconds);
             OnVoiceLinePlayed?.Invoke(entry.LineKey, seconds);
         }
 
