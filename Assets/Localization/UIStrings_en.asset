@@ -114,6 +114,46 @@ MonoBehaviour:
     m_Localized: English
     m_Metadata:
       m_Items: []
+  - m_Id: 49998721482752
+    m_Localized: Yay!
+    m_Metadata:
+      m_Items: []
+  - m_Id: 49998755037184
+    m_Localized: Modeler
+    m_Metadata:
+      m_Items: []
+  - m_Id: 53472406306816
+    m_Localized: Yay! Call me the queen of killing time!
+    m_Metadata:
+      m_Items: []
+  - m_Id: 53472452444160
+    m_Localized: Got it! Staff meal's on you, boss!
+    m_Metadata:
+      m_Items: []
+  - m_Id: 53472452444161
+    m_Localized: I win! Let's have fun next time too!
+    m_Metadata:
+      m_Items: []
+  - m_Id: 53472452444162
+    m_Localized: You win this time... I won't lose next time.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 53472452444163
+    m_Localized: Aww... I thought I had first place...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 53472452444164
+    m_Localized: Waah... I couldn't do it well...
+    m_Metadata:
+      m_Items: []
+  - m_Id: 53472452444165
+    m_Localized: Didn't make the ranking! I'll be back!
+    m_Metadata:
+      m_Items: []
+  - m_Id: 53472452444166
+    m_Localized: Grr... I could've done a bit better...
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: af8173a8f961ac74583830433f9a92ba, type: 3}
+  m_Name: VC_Result_Rank1
+  m_EditorClassIdentifier: Assembly-CSharp::Taurus.Runtime.Game.VoiceCue
+  _entries:
+  - _clip: {fileID: 8300000, guid: 91a77ff8958b43429432fa3f811945a7, type: 3}
+    _lineKey: voice.rank1.a
+  - _clip: {fileID: 8300000, guid: decace8e07724df08cbf98402d064b16, type: 3}
+    _lineKey: voice.rank1.b
+  - _clip: {fileID: 8300000, guid: c0f9facec5ec44dabece92f88b0b9b6a, type: 3}
+    _lineKey: voice.rank1.c
+  _volumeVariance: 0.05
+  _pitchVariance: 0.02

@@ -107,6 +107,46 @@ MonoBehaviour:
     m_Key: language.en
     m_Metadata:
       m_Items: []
+  - m_Id: 49998721482752
+    m_Key: voice.waveClear
+    m_Metadata:
+      m_Items: []
+  - m_Id: 49998755037184
+    m_Key: credits.role.modeler
+    m_Metadata:
+      m_Items: []
+  - m_Id: 53472406306816
+    m_Key: voice.rank1.a
+    m_Metadata:
+      m_Items: []
+  - m_Id: 53472452444160
+    m_Key: voice.rank1.b
+    m_Metadata:
+      m_Items: []
+  - m_Id: 53472452444161
+    m_Key: voice.rank1.c
+    m_Metadata:
+      m_Items: []
+  - m_Id: 53472452444162
+    m_Key: voice.rank23.a
+    m_Metadata:
+      m_Items: []
+  - m_Id: 53472452444163
+    m_Key: voice.rank23.b
+    m_Metadata:
+      m_Items: []
+  - m_Id: 53472452444164
+    m_Key: voice.rankOut.a
+    m_Metadata:
+      m_Items: []
+  - m_Id: 53472452444165
+    m_Key: voice.rankOut.b
+    m_Metadata:
+      m_Items: []
+  - m_Id: 53472452444166
+    m_Key: voice.rankOut.c
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:
