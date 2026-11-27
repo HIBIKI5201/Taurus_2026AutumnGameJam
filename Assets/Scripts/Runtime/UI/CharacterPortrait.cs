@@ -30,6 +30,7 @@ namespace Taurus.Runtime.UI
         /// <summary> ボタンを押した差分を最初から出し直す。 </summary>
         public void PlayClick()
         {
+            EnsureInitialized();
             if (_isClear || _clickSprite == null)
             {
                 return;
@@ -43,6 +44,7 @@ namespace Taurus.Runtime.UI
         /// <summary> Wave 成功の差分を出す。ShowIdle まで押下の差分は出さない。 </summary>
         public void ShowClear()
         {
+            EnsureInitialized();
             _isClear = true;
             _clickRemaining = 0f;
             _rect.anchoredPosition = _basePosition;
@@ -55,6 +57,7 @@ namespace Taurus.Runtime.UI
         /// <summary> 通常の立ち絵に戻す。 </summary>
         public void ShowIdle()
         {
+            EnsureInitialized();
             _isClear = false;
             _clickRemaining = 0f;
             _rect.anchoredPosition = _basePosition;
@@ -66,6 +69,17 @@ namespace Taurus.Runtime.UI
 
         private void Awake()
         {
+            EnsureInitialized();
+        }
+
+        // ゲーム画面が非表示のまま（Awake 前に）HUDController から呼ばれることがあるため、初回の呼び出しで参照を用意する
+        private void EnsureInitialized()
+        {
+            if (_rect != null)
+            {
+                return;
+            }
+
             _image = GetComponent<Image>();
             _rect = (RectTransform)transform;
             _basePosition = _rect.anchoredPosition;
