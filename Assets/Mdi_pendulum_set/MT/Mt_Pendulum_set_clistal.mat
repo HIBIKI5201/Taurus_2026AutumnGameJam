@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: Mt_Pendulum_set_clistal
-  m_Shader: {fileID: 4800000, guid: a8d94439709469942bc7dcc9156ba110, type: 3}
+  m_Shader: {fileID: 4800000, guid: 3fb94a39b2685ee4d9817dcaf6542d99, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -347,14 +347,14 @@ Material:
     - _ClearCoatSmoothness: 0
     - _ColorMask: 15
     - _Cull: 0
-    - _Cutoff: -0.001
+    - _Cutoff: 0.001
     - _DetailAlbedoMapScale: 1
     - _DetailNormalMapScale: 1
     - _DissolveNoiseStrength: 0.1
     - _DistanceFadeMode: 0
     - _DistanceFadeRimFresnelPower: 5
     - _DitherMaxValue: 255
-    - _DstBlend: 1
+    - _DstBlend: 0
     - _DstBlendAlpha: 10
     - _DstBlendAlphaFA: 1
     - _DstBlendFA: 1
@@ -575,7 +575,7 @@ Material:
     - _ReflectionNormalStrength: 1
     - _RefractionColorFromMain: 0
     - _RefractionFresnelPower: 0.5
-    - _RefractionStrength: 0.1
+    - _RefractionStrength: 0.39
     - _RimApplyTransparency: 1
     - _RimBackfaceMask: 0
     - _RimBlendMode: 1
@@ -690,7 +690,7 @@ Material:
     - _WorkflowMode: 1
     - _ZClip: 1
     - _ZTest: 4
-    - _ZWrite: 0
+    - _ZWrite: 1
     - _e2gai: 2
     - _e2gci: 2
     - _egai: 2
@@ -726,7 +726,7 @@ Material:
     - _Emission2ndMap_ScrollRotate: {r: 0, g: 0, b: 0, a: 0}
     - _EmissionBlendMask_ScrollRotate: {r: 0, g: 0, b: 0, a: 0}
     - _EmissionBlink: {r: 0, g: 0, b: 3.141593, a: 0}
-    - _EmissionColor: {r: 1, g: 1, b: 1, a: 1}
+    - _EmissionColor: {r: 1, g: 1, b: 1, a: 0}
     - _EmissionMap_ScrollRotate: {r: 0, g: 0, b: 0, a: 0}
     - _GemEnvColor: {r: 1, g: 1, b: 1, a: 1}
     - _GemParticleColor: {r: 4, g: 4, b: 4, a: 1}
