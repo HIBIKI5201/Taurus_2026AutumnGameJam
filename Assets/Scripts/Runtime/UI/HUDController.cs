@@ -618,7 +618,7 @@ namespace Taurus.Runtime.UI
             Text bannerText = _successBanner != null ? _successBanner.GetComponentInChildren<Text>(true) : null;
             if (bannerText != null)
             {
-                bannerText.text = $"CLEAR!  正解 {expectedCount}回\n次は WAVE {nextWave:00}";
+                bannerText.text = L10n.Format("game.successBanner", expectedCount, nextWave);
                 PlayScalePop(_successBanner.transform, 0.86f, 0.24f);
                 if (_feedbackText != null)
                 {
@@ -627,7 +627,7 @@ namespace Taurus.Runtime.UI
             }
             else if (_feedbackText != null)
             {
-                _feedbackText.text = $"正解！（{expectedCount}回） 次のウェーブへ";
+                _feedbackText.text = L10n.Format("game.successFeedback", expectedCount);
             }
 
             // 成功メッセージは次Waveの開始（HandleWaveStarted）まで表示し続ける
