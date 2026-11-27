@@ -602,7 +602,7 @@ MonoBehaviour:
     _doublePendulumCount: 2
     _triplePendulumCount: 0
     _startTimeSeconds: 0
-    _endTimeSeconds: 5
+    _endTimeSeconds: 8
     _stopRule: 0
     _timeQuantizationStep: 1
     _useWaveQuantityConstraint: 1
@@ -674,7 +674,7 @@ MonoBehaviour:
         _durationSeconds: 1
       - _weight: 5
         _topCount: 2
-        _durationSeconds: 2
+        _durationSeconds: 1
     - _label: "\u4E2D\u76E4(\u52A0\u901F)"
       _durationSeconds: 2
       _useQuantityConstraint: 1
@@ -701,10 +701,10 @@ MonoBehaviour:
         _durationSeconds: 1
       - _weight: 53
         _topCount: 1
-        _durationSeconds: 2
+        _durationSeconds: 1
       - _weight: 7
         _topCount: 2
-        _durationSeconds: 2
+        _durationSeconds: 1
     _choices:
     - _weight: 78
       _topCount: 0
