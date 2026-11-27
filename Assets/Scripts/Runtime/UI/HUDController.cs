@@ -76,6 +76,11 @@ namespace Taurus.Runtime.UI
         [SerializeField] private Text[] _recordValueTexts; // 要素0=1ST, 1=2ND, 2=3RD
         [SerializeField] private Button _retryButton;
 
+        // リザルト画面左の大きな立ち絵と、ランキング更新時・非更新時の表情差分
+        [SerializeField] private Image _resultCharacterImage;
+        [SerializeField] private Sprite _resultRankUpdatedSprite;
+        [SerializeField] private Sprite _resultRankNotUpdatedSprite;
+
         // リザルト画面中央の、リプレイに合わせて数え上がる答えのカウンター
         [SerializeField] private Text _replayCountText;
         [SerializeField] private RectTransform _replayCounterRoot;
@@ -626,6 +631,16 @@ namespace Taurus.Runtime.UI
         private void HandleGameFinished(int clearedWaves, int expectedCount, int playerCount, IReadOnlyList<int> records)
         {
             bool isNewTopRecord = GameAudioHooks.IsTopRecord(clearedWaves, records);
+
+            // ランキング（トップ3）を更新できたかで、リザルトの立ち絵の表情を変える
+            if (_resultCharacterImage != null)
+            {
+                Sprite resultSprite = isNewTopRecord ? _resultRankUpdatedSprite : _resultRankNotUpdatedSprite;
+                if (resultSprite != null)
+                {
+                    _resultCharacterImage.sprite = resultSprite;
+                }
+            }
 
             if (_clearedWavesText != null)
             {
