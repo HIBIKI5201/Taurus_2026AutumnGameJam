@@ -76,8 +76,8 @@ MonoBehaviour:
   _grandchildBob: {fileID: 0}
   _grandchildBobMeshRenderer: {fileID: 683292596124236693}
   _grandchildBobRenderer: {fileID: 0}
-  _grandchildIdleEmissionColor: {r: 0, g: 0.496191, b: 3.031433, a: 1}
-  _grandchildFlashEmissionColor: {r: 0.06013695, g: 4.965426, b: 6, a: 6}
+  _grandchildIdleEmissionColor: {r: 0, g: 0, b: 0, a: 1}
+  _grandchildFlashEmissionColor: {r: 0, g: 0.60372543, b: 8, a: 6}
 --- !u!1 &4215619482232314764
 GameObject:
   m_ObjectHideFlags: 0
