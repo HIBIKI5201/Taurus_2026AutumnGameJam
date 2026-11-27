@@ -99,13 +99,11 @@ MonoBehaviour:
     m_Metadata:
       m_Items: []
   - m_Id: 4840783889
-    m_Localized: 'CLEAR!  Answer: {0}
-
-      Next: WAVE {1:00}'
+    m_Localized: Correct! Wave {0} Clear!!
     m_Metadata:
       m_Items: []
   - m_Id: 4840783890
-    m_Localized: Correct! ({0}) On to the next wave
+    m_Localized: Correct! Wave {0} Clear!!
     m_Metadata:
       m_Items: []
   - m_Id: 4840783891
